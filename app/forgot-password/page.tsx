@@ -1,0 +1,3 @@
+import Link from "next/link";
+
+export default function ForgotPasswordPage() { return <main className="app-page"><div className="form-card"><Link className="auth-logo brand" href="/"><span className="brand-mark">▦</span><span>Review Saathi</span></Link><div className="panel"><div className="auth-title"><h1>Reset your password</h1><p>We’ll send a secure one-time link if the email exists.</p></div><form action="/api/auth/forgot-password" method="post"><div className="field"><label>Email address</label><input name="email" type="email" required placeholder="name@business.com" /></div><button className="btn btn-primary" type="submit">Send reset link</button></form><div className="auth-links"><Link href="/login">← Back to login</Link></div></div></div></main>; }

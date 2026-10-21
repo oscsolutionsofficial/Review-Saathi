@@ -1,0 +1,7 @@
+@import "../styles.css";
+
+body { min-height: 100vh; }
+.next-shell { min-height: 100vh; }
+.error-text { color: #a33e3e; font-size: 12px; margin: 8px 0; }
+.auth-alert { border: 1px solid #efb7ae; background: #fff1ee; color: #9b3d32; border-radius: 9px; padding: 11px 13px; margin-bottom: 16px; font-size: 13px; line-height: 1.45; }
+.auth-success { border-color: #b8dcc5; background: #eef9f1; color: #267143; }

@@ -1,0 +1,8 @@
+import Link from "next/link";
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; reset?: string }> }) {
+  const params = await searchParams;
+  const messages: Record<string, string> = { invalid: "The email or password is incorrect. Please check your details and try again.", admin_only: "This login is reserved for the Super Admin.", configuration: "Application configuration is incomplete. Please contact the administrator.", server: "The login service is temporarily unavailable. Please try again shortly." };
+  const message = params.error ? messages[params.error] ?? messages.server : null;
+  return <main className="app-page"><div className="form-card"><Link className="auth-logo brand" href="/"><span className="brand-mark">▦</span><span>Review Saathi</span></Link><div className="panel"><div className="auth-title"><h1>Welcome back</h1><p>Login to manage your reviews and business.</p></div>{message && <div className="auth-alert" role="alert">{message}</div>}{params.reset === "sent" && <div className="auth-alert auth-success" role="status">If the email is registered, a reset link has been sent.</div>}<form action="/api/auth/login" method="post"><div className="field"><label htmlFor="email">Email address</label><input id="email" name="email" type="email" required placeholder="name@business.com" /></div><div className="field"><label htmlFor="password">Password</label><input id="password" name="password" type="password" required /></div><button className="btn btn-primary" type="submit">Login →</button></form><div className="auth-links"><Link href="/forgot-password">Forgot password?</Link></div></div><p className="review-footer"><Link href="/">← Back to website</Link></p></div></main>;
+}
