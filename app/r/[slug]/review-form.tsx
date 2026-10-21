@@ -51,7 +51,6 @@ export default function ReviewForm({ slug, businessName, city, logoUrl, language
     const draft = drafts[selectedDraft]?.trim();
     if (!draft || posting) return;
     setPosting(true); setError("");
-    const target = window.open("about:blank", "_blank");
     try {
       await copyText(draft);
       const response = await fetch("/api/review/scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ slug, scanId: scanId || undefined, rating, tags: selected, language, copied: true, privateFeedback: privateFeedback.trim() || undefined }) });
@@ -59,8 +58,9 @@ export default function ReviewForm({ slug, businessName, city, logoUrl, language
       if (!response.ok) throw new Error(data.error || "Could not save your review activity.");
       if (!placeId.trim()) throw new Error("This business has not connected its Google review link yet. Please contact the business.");
       const googleUrl = /^https?:\/\//i.test(placeId) ? placeId : `https://search.google.com/local/writereview?placeid=${encodeURIComponent(placeId.trim())}`;
-      if (target) target.location.href = googleUrl; else window.location.href = googleUrl;
-    } catch (reason) { target?.close(); setError(reason instanceof Error ? reason.message : "Could not continue to Google."); }
+      const target = window.open(googleUrl, "_blank", "noopener,noreferrer");
+      if (!target) window.location.assign(googleUrl);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not continue to Google."); }
     finally { setPosting(false); }
   }
 
