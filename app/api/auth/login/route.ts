@@ -18,8 +18,8 @@ export async function POST(request: Request) {
       await supabase.auth.signOut();
       return NextResponse.redirect(new URL("/login?error=admin_only", request.url));
     }
-    if (member.role === "client" && member.must_change_password) return NextResponse.redirect(new URL("/change-password", request.url));
-    return NextResponse.redirect(new URL(member.role === "superadmin" ? "/admin" : "/client/dashboard", request.url));
+    if (member.role === "client" && member.must_change_password) return NextResponse.redirect(new URL("/change-password", request.url), { status: 303 });
+    return NextResponse.redirect(new URL(member.role === "superadmin" ? "/admin" : "/client/dashboard", request.url), { status: 303 });
   } catch {
     return NextResponse.redirect(new URL("/login?error=configuration", request.url));
   }
