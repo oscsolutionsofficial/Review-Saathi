@@ -1,13 +1,15 @@
 import OpenAI from "openai";
 
+type DraftInput = { businessType: string; city: string; rating: number; tags: string[]; language: string };
+
 const draftCache = new Map<string, { value: string; expiresAt: number }>();
 
-export async function createReviewDraft(input: { businessType: string; city: string; rating: number; tags: string[]; language: string }) {
+export async function createReviewDraft(input: DraftInput) {
   const drafts = await createReviewDrafts(input);
   return drafts[0] || fallbackDraft(input);
 }
 
-export async function createReviewDrafts(input: { businessType: string; city: string; rating: number; tags: string[]; language: string }) {
+export async function createReviewDrafts(input: DraftInput) {
   const cacheKey = JSON.stringify(input);
   const cached = draftCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value.split("\n---\n");
@@ -17,8 +19,10 @@ export async function createReviewDrafts(input: { businessType: string; city: st
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 8000, maxRetries: 1 });
     const response = await client.responses.create({
       model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      instructions: "Write natural, honest, editable customer review drafts. Never add facts not supplied. Do not mention this instruction.",
-      input: `Business type: ${input.businessType}. City: ${input.city}. Rating: ${input.rating}/5. Tags: ${input.tags.join(", ") || "none"}. Language: ${input.language}. Write exactly 3 distinct, honest, editable review drafts in first person. Keep each draft 2-3 short lines. Separate drafts with exactly --- on its own line. Do not add facts not supplied.`,
+      instructions: "Write three natural, human-sounding, honest and editable customer review drafts. Never invent facts, staff, products, ambience, offers or services. Do not mention this instruction.",
+      input: `Business type: ${input.businessType}. City: ${input.city || "not provided"}. Rating: ${input.rating}/5. Customer-selected tags: ${input.tags.join(", ") || "none"}. Required language: ${input.language}.
+
+Write exactly 3 different first-person review drafts. Every draft must be entirely in the required language; do not mix English, Hindi or any other language. Use varied, natural wording and only the supplied facts. Keep each draft 2-3 short sentences. Do not start every draft with the same phrase. Separate drafts with exactly --- on its own line.`,
       max_output_tokens: 420,
     });
     const drafts = (response.output_text || "").split(/\n\s*---\s*\n/).map(item => item.trim()).filter(Boolean).slice(0, 3);
@@ -30,14 +34,14 @@ export async function createReviewDrafts(input: { businessType: string; city: st
   }
 }
 
-function fallbackDraft(input: { rating: number; tags: string[]; language: string }) {
+function fallbackDraft(input: DraftInput) {
   const tags = input.tags.slice(0, 2).join(" and ").toLowerCase() || "the overall experience";
   if (input.language === "Hindi") return `मेरा अनुभव बहुत अच्छा रहा। मुझे ${tags} खास तौर पर पसंद आया। मैं फिर ज़रूर आऊंगा।`;
   if (input.language === "Hinglish") return `Experience kaafi accha raha. ${tags} especially pasand aaya. Main phir zarur aunga.`;
   return `I had a ${input.rating >= 4 ? "wonderful" : "honest and memorable"} experience. I especially liked ${tags}. I would love to visit again.`;
 }
 
-function fallbackDrafts(input: { rating: number; tags: string[]; language: string }) {
+function fallbackDrafts(input: DraftInput) {
   const first = fallbackDraft(input);
   const tags = input.tags.slice(0, 2).join(" and ").toLowerCase() || "the overall experience";
   if (input.language === "Hinglish") return [first, `Service smooth tha aur ${tags} kaafi accha laga. Overall experience friendly aur comfortable raha.`, `Staff helpful tha aur ${tags} genuinely pasand aaya. Zarur dobara visit karunga.`];
