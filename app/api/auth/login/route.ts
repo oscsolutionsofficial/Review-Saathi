@@ -1,11 +1,22 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { allowRequestDistributed, rateLimitHash, requestIp } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
     const form = await request.formData();
-    const email = String(form.get("email") ?? ""); const password = String(form.get("password") ?? "");
+    const email = String(form.get("email") ?? "").trim().toLowerCase(); const password = String(form.get("password") ?? "");
+    const ipKey = `login:ip:${requestIp(request)}`;
+    const emailKey = `login:email:${rateLimitHash(email)}`;
+    const [ipAllowed, emailAllowed] = await Promise.all([
+      allowRequestDistributed(ipKey, 5, 15 * 60_000),
+      allowRequestDistributed(emailKey, 5, 15 * 60_000),
+    ]);
+    if (!ipAllowed || !emailAllowed) return NextResponse.redirect(new URL("/login?error=rate_limited", request.url), { status: 303 });
+    const cookieStore = await cookies();
+    cookieStore.getAll().filter(cookie => cookie.name.startsWith("sb-")).forEach(cookie => cookieStore.delete(cookie.name));
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return NextResponse.redirect(new URL("/login?error=invalid", request.url));

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/supabase/require-super-admin";
+import { PLAN_FEATURE_KEYS } from "@/lib/plan-access";
 
 function cleanFeatures(value: unknown) {
   if (!Array.isArray(value)) return {};
-  return Object.fromEntries(value.map(item => String(item).trim().toLowerCase().replace(/\s+/g, "_")).filter(Boolean).map(key => [key, true]));
+  const allowed = new Set<string>(PLAN_FEATURE_KEYS);
+  return Object.fromEntries(value.map(item => String(item).trim().toLowerCase().replace(/\s+/g, "_")).filter(key => allowed.has(key)).map(key => [key, true]));
 }
 
 export async function PATCH(request: Request) {

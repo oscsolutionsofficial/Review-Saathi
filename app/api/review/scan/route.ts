@@ -2,35 +2,110 @@ import { NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { reviewScanSchema } from "@/lib/validation";
 import { allowRequestDistributed, requestIp } from "@/lib/rate-limit";
+import { getTenantPlanAccess, hasPlanFeature } from "@/lib/plan-access";
+import { resolvePublicLocation } from "@/lib/location";
 
 export async function POST(request: Request) {
-  if (!await allowRequestDistributed(`scan:${requestIp(request)}`, 30, 60_000)) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  if (
+    !(await allowRequestDistributed(`scan:${requestIp(request)}`, 30, 60_000))
+  )
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   const parsed = reviewScanSchema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: "Invalid scan" }, { status: 400 });
+  if (!parsed.success)
+    return NextResponse.json({ error: "Invalid scan" }, { status: 400 });
   const admin = createSupabaseAdmin();
-  const { data: tenant } = await admin.from("tenants").select("id,status").eq("slug", parsed.data.slug).maybeSingle();
-  if (!tenant || tenant.status !== "active") return NextResponse.json({ error: "Business is not active" }, { status: 404 });
-  if (!parsed.data.scanId) {
-    const today = new Date().toISOString().slice(0, 10);
-    const { data: subscription } = await admin.from("subscriptions").select("start_date,end_date,status,plans(max_scans_per_month)").eq("tenant_id", tenant.id).eq("status", "active").maybeSingle();
-    const plan = Array.isArray(subscription?.plans) ? subscription?.plans[0] : subscription?.plans;
-    const { count: usedScans } = await admin.from("scans").select("id", { count: "exact", head: true }).eq("tenant_id", tenant.id).gte("created_at", subscription?.start_date || "1900-01-01");
-    const limit = Number(plan?.max_scans_per_month || 0);
-    if (!subscription || (subscription.end_date && subscription.end_date < today)) return NextResponse.json({ error: "Your plan has expired. Please renew to continue collecting scans." }, { status: 402 });
-    if (limit > 0 && (usedScans ?? 0) >= limit) return NextResponse.json({ error: "Your monthly scan limit is complete. Please renew or upgrade your plan." }, { status: 402 });
-  }
+  const resolved = await resolvePublicLocation(admin, parsed.data.slug);
+  if (!resolved)
+    return NextResponse.json(
+      { error: "Business is not active" },
+      { status: 404 },
+    );
+  const { tenant, location } = resolved;
+  const access = await getTenantPlanAccess(admin, tenant.id);
+  if (!access.active)
+    return NextResponse.json(
+      { error: "This business plan is inactive. Please contact the business." },
+      { status: 402 },
+    );
+  if (
+    parsed.data.language !== "English" &&
+    !hasPlanFeature(access, "languages")
+  )
+    return NextResponse.json(
+      { error: "This plan supports English reviews only." },
+      { status: 403 },
+    );
+  if (
+    parsed.data.privateFeedback &&
+    !hasPlanFeature(access, "private_feedback")
+  )
+    return NextResponse.json(
+      { error: "Private feedback is not included in this plan." },
+      { status: 403 },
+    );
   let scanId = parsed.data.scanId;
   if (scanId) {
-    const { data: updated, error } = await admin.from("scans").update({ rating: parsed.data.rating, tags: parsed.data.tags, language: parsed.data.language, copied: parsed.data.copied }).eq("id", scanId).eq("tenant_id", tenant.id).select("id").maybeSingle();
-    if (error || !updated) return NextResponse.json({ error: "Could not update scan" }, { status: 500 });
+    let updateQuery = admin
+      .from("scans")
+      .update({
+        rating: parsed.data.rating,
+        tags: parsed.data.tags,
+        language: parsed.data.language,
+        copied: parsed.data.copied,
+      })
+      .eq("id", scanId)
+      .eq("tenant_id", tenant.id);
+    if (location.id) updateQuery = updateQuery.eq("location_id", location.id);
+    const { data: updated, error } = await updateQuery
+      .select("id")
+      .maybeSingle();
+    if (error || !updated)
+      return NextResponse.json(
+        { error: "Could not update scan" },
+        { status: 500 },
+      );
   } else {
-    const { data: created, error } = await admin.from("scans").insert({ tenant_id: tenant.id, rating: parsed.data.rating, tags: parsed.data.tags, language: parsed.data.language, copied: parsed.data.copied }).select("id").single();
-    if (error || !created) return NextResponse.json({ error: "Could not save scan" }, { status: 500 });
-    scanId = created.id;
+    const rpcArgs = {
+      p_tenant_id: tenant.id,
+      p_rating: parsed.data.rating,
+      p_tags: parsed.data.tags,
+      p_language: parsed.data.language,
+      p_copied: parsed.data.copied,
+      ...(location.id ? { p_location_id: location.id } : {}),
+    };
+    const { data: created, error } = await admin.rpc("create_public_scan", rpcArgs);
+    if (error) {
+      if (error.message.includes("PLAN_EXPIRED"))
+        return NextResponse.json(
+          {
+            error:
+              "Your plan has expired. Please renew to continue collecting scans.",
+          },
+          { status: 402 },
+        );
+      if (error.message.includes("SCAN_LIMIT_REACHED"))
+        return NextResponse.json(
+          {
+            error:
+              "Your monthly scan limit is complete. Please renew or upgrade your plan.",
+          },
+          { status: 402 },
+        );
+      return NextResponse.json(
+        { error: "Could not save scan" },
+        { status: 500 },
+      );
+    }
+    scanId = created as string;
   }
   if (parsed.data.privateFeedback) {
-    const { error } = await admin.from("private_feedback").insert({ tenant_id: tenant.id, rating: parsed.data.rating, message: parsed.data.privateFeedback });
-    if (error) return NextResponse.json({ error: "Scan saved, but private feedback could not be saved." }, { status: 500 });
+    const feedbackPayload = { tenant_id: tenant.id, rating: parsed.data.rating, message: parsed.data.privateFeedback, ...(location.id ? { location_id: location.id } : {}) };
+    const { error } = await admin.from("private_feedback").insert(feedbackPayload);
+    if (error)
+      return NextResponse.json(
+        { error: "Scan saved, but private feedback could not be saved." },
+        { status: 500 },
+      );
   }
   return NextResponse.json({ ok: true, scanId });
 }

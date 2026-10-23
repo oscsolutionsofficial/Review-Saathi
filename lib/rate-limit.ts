@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 const buckets = new Map<string, { count: number; resetAt: number }>();
 
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL?.replace(/\/$/, "");
@@ -31,4 +33,8 @@ export async function allowRequestDistributed(key: string, limit: number, window
 
 export function requestIp(request: Request) {
   return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+}
+
+export function rateLimitHash(value: string) {
+  return createHash("sha256").update(value.trim().toLowerCase()).digest("hex");
 }

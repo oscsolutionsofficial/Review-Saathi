@@ -71,36 +71,30 @@ export async function POST(request: Request) {
   const slugPrefix = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 8) || "client";
   const slug = `${slugPrefix}${crypto.randomUUID().replaceAll("-", "").slice(0, 4)}`.slice(0, 12);
 
-  const { data: tenant, error: tenantError } = await adminClient.from("tenants").insert({ name: input.name, slug, status: input.status === "Disabled" ? "disabled" : "active", onboarding_completed: false }).select("id").single();
-  if (tenantError || !tenant) return NextResponse.json({ error: process.env.NODE_ENV === "development" && tenantError ? `Unable to create the client account: ${tenantError.message}` : "Unable to create the client account." }, { status: 500 });
-  const { error: profileError } = await adminClient.from("profiles").insert({ tenant_id: tenant.id, city: input.city, owner_email: input.owner });
-  if (profileError) {
-    await adminClient.from("tenants").delete().eq("id", tenant.id);
-    return NextResponse.json({ error: process.env.NODE_ENV === "development" ? `Unable to save the client profile: ${profileError.message}` : "Unable to save the client profile." }, { status: 500 });
+  const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({ email: input.owner, password: input.password, email_confirm: true });
+  if (authError || !authUser.user) {
+    return NextResponse.json({ error: authError?.message.toLowerCase().includes("already") ? "This owner email is already registered." : process.env.NODE_ENV === "development" && authError ? `Unable to create the client login: ${authError.message}` : "Unable to create the client login." }, { status: 400 });
   }
   const startDate = new Date();
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + plan.duration_days);
-  const { error: subscriptionError } = await adminClient.from("subscriptions").insert({ tenant_id: tenant.id, plan_id: plan.id, start_date: startDate.toISOString().slice(0, 10), end_date: endDate.toISOString().slice(0, 10), status: "active", created_by: user.id });
-  if (subscriptionError) {
-    await adminClient.from("profiles").delete().eq("tenant_id", tenant.id);
-    await adminClient.from("tenants").delete().eq("id", tenant.id);
-    return NextResponse.json({ error: process.env.NODE_ENV === "development" ? `Unable to create the client subscription: ${subscriptionError.message}` : "Unable to create the client subscription." }, { status: 500 });
+  const { data: createdTenantId, error: accountError } = await adminClient.rpc("create_client_account", {
+    p_auth_user_id: authUser.user.id,
+    p_actor_id: user.id,
+    p_name: input.name,
+    p_slug: slug,
+    p_status: input.status === "Disabled" ? "disabled" : "active",
+    p_city: input.city,
+    p_owner_email: input.owner,
+    p_plan_id: plan.id,
+    p_start_date: startDate.toISOString().slice(0, 10),
+    p_end_date: endDate.toISOString().slice(0, 10),
+  });
+  if (accountError || !createdTenantId) {
+    const { error: cleanupError } = await adminClient.auth.admin.deleteUser(authUser.user.id);
+    if (cleanupError) console.error("Failed to clean up auth user after client creation failure", cleanupError);
+    return NextResponse.json({ error: process.env.NODE_ENV === "development" && accountError ? `Unable to create the client account: ${accountError.message}` : "Unable to create the client account." }, { status: 500 });
   }
-  const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({ email: input.owner, password: input.password, email_confirm: true });
-  if (authError || !authUser.user) {
-    await adminClient.from("profiles").delete().eq("tenant_id", tenant.id);
-    await adminClient.from("tenants").delete().eq("id", tenant.id);
-    return NextResponse.json({ error: authError?.message.toLowerCase().includes("already") ? "This owner email is already registered." : process.env.NODE_ENV === "development" && authError ? `Unable to create the client login: ${authError.message}` : "Unable to create the client login." }, { status: 400 });
-  }
-  const { error: memberError } = await adminClient.from("users").insert({ id: authUser.user.id, tenant_id: tenant.id, role: "client", must_change_password: true });
-  if (memberError) {
-    await adminClient.auth.admin.deleteUser(authUser.user.id);
-    await adminClient.from("profiles").delete().eq("tenant_id", tenant.id);
-    await adminClient.from("tenants").delete().eq("id", tenant.id);
-    return NextResponse.json({ error: process.env.NODE_ENV === "development" ? `Unable to link the client login: ${memberError.message}` : "Unable to link the client login." }, { status: 500 });
-  }
-  await adminClient.from("audit_log").insert({ actor_id: user.id, tenant_id: tenant.id, action: "client.created", details: { name: input.name } });
   return noStore(NextResponse.json({ ok: true }, { status: 201 }));
 }
 

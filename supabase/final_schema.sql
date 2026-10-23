@@ -183,10 +183,27 @@ as $$ select exists (
   select 1 from public.users where id = auth.uid() and role = 'superadmin'
 ) $$;
 
+create or replace function public.current_tenant_has_feature(feature_key text)
+returns boolean language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.users u
+    join public.subscriptions s on s.tenant_id = u.tenant_id
+    join public.plans p on p.id = s.plan_id
+    where u.id = auth.uid()
+      and s.status = 'active'
+      and s.end_date >= current_date
+      and coalesce((p.features ->> feature_key)::boolean, false)
+  )
+$$;
+
 revoke all on function public.current_tenant_id() from public;
 revoke all on function public.is_superadmin() from public;
+revoke all on function public.current_tenant_has_feature(text) from public;
 grant execute on function public.current_tenant_id() to authenticated;
 grant execute on function public.is_superadmin() to authenticated;
+grant execute on function public.current_tenant_has_feature(text) to authenticated;
 
 alter table public.tenants enable row level security;
 alter table public.profiles enable row level security;
@@ -230,7 +247,7 @@ create policy scans_select_own on public.scans for select to authenticated
 using (tenant_id = public.current_tenant_id());
 
 create policy feedback_select_own on public.private_feedback for select to authenticated
-using (tenant_id = public.current_tenant_id());
+using (tenant_id = public.current_tenant_id() and public.current_tenant_has_feature('private_feedback'));
 
 create policy audit_select_own on public.audit_log for select to authenticated
 using (tenant_id = public.current_tenant_id());
@@ -243,7 +260,7 @@ insert into public.plans
 values
   ('Starter', 499, 30, 500, 250, '{"qr":true,"basic_reports":true}'),
   ('Growth', 999, 30, 1000, 500, '{"qr":true,"basic_reports":true,"languages":true,"private_feedback":true,"detailed_dashboard":true}'),
-  ('Business', 1999, 30, 5000, 2500, '{"qr":true,"multiple_locations":true,"team_access":true,"priority_support":true}')
+  ('Business', 1999, 30, 5000, 2500, '{"qr":true,"multiple_locations":true,"priority_support":true}')
 on conflict (name) do nothing;
 
 -- Production performance indexes and dashboard aggregation.
@@ -282,6 +299,104 @@ as $$
 $$;
 
 grant execute on function public.get_tenant_dashboard_stats() to authenticated;
+
+-- Public scan creation is serialized per tenant so concurrent requests cannot
+-- bypass the subscription scan limit.
+create or replace function public.create_public_scan(
+  p_tenant_id uuid,
+  p_rating integer,
+  p_tags text[],
+  p_language text,
+  p_copied boolean
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  subscription_row public.subscriptions%rowtype;
+  scan_limit integer;
+  used_scans integer;
+  new_scan_id uuid;
+begin
+  select s.* into subscription_row
+  from public.subscriptions s
+  where s.tenant_id = p_tenant_id and s.status = 'active'
+  order by s.created_at desc
+  limit 1
+  for update;
+
+  if not found or subscription_row.end_date < current_date then
+    raise exception 'PLAN_EXPIRED';
+  end if;
+
+  select p.max_scans_per_month into scan_limit
+  from public.plans p
+  where p.id = subscription_row.plan_id;
+
+  select count(*)::integer into used_scans
+  from public.scans
+  where tenant_id = p_tenant_id and created_at >= subscription_row.start_date;
+
+  if coalesce(scan_limit, 0) > 0 and used_scans >= scan_limit then
+    raise exception 'SCAN_LIMIT_REACHED';
+  end if;
+
+  insert into public.scans (tenant_id, rating, tags, language, copied)
+  values (p_tenant_id, p_rating, coalesce(p_tags, '{}'::text[]), p_language, coalesce(p_copied, false))
+  returning id into new_scan_id;
+
+  return new_scan_id;
+end;
+$$;
+
+-- Auth users are created through the Supabase Admin API; all related public
+-- rows are created together in this transaction.
+create or replace function public.create_client_account(
+  p_auth_user_id uuid,
+  p_actor_id uuid,
+  p_name text,
+  p_slug text,
+  p_status public.tenant_status,
+  p_city text,
+  p_owner_email text,
+  p_plan_id uuid,
+  p_start_date date,
+  p_end_date date
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_tenant_id uuid;
+begin
+  insert into public.tenants (name, slug, status, onboarding_completed)
+  values (p_name, p_slug, p_status, false)
+  returning id into new_tenant_id;
+
+  insert into public.profiles (tenant_id, city, owner_email)
+  values (new_tenant_id, p_city, p_owner_email);
+
+  insert into public.users (id, tenant_id, role, must_change_password)
+  values (p_auth_user_id, new_tenant_id, 'client', true);
+
+  insert into public.subscriptions (tenant_id, plan_id, start_date, end_date, status, created_by)
+  values (new_tenant_id, p_plan_id, p_start_date, p_end_date, 'active', p_actor_id);
+
+  insert into public.audit_log (actor_id, tenant_id, action, details)
+  values (p_actor_id, new_tenant_id, 'client.created', jsonb_build_object('name', p_name));
+
+  return new_tenant_id;
+end;
+$$;
+
+revoke all on function public.create_public_scan(uuid, integer, text[], text, boolean) from public;
+revoke all on function public.create_client_account(uuid, uuid, text, text, public.tenant_status, text, text, uuid, date, date) from public;
+grant execute on function public.create_public_scan(uuid, integer, text[], text, boolean) to service_role;
+grant execute on function public.create_client_account(uuid, uuid, text, text, public.tenant_status, text, text, uuid, date, date) to service_role;
 
 -- Restore the privileges required by Supabase API roles after a fresh public schema.
 grant usage on schema public to anon, authenticated, service_role;

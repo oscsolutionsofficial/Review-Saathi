@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import PasswordVisibility from "./password-visibility";
 
 export const metadata: Metadata = {
   title: "Review Saathi",
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" suppressHydrationWarning><body suppressHydrationWarning><div className="next-shell">{children}</div></body></html>;
+  return <html lang="en" suppressHydrationWarning><body suppressHydrationWarning><div className="next-shell"><PasswordVisibility />{children}</div></body></html>;
 }
