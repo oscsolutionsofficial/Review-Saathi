@@ -50,7 +50,7 @@ export async function GET() {
     return NextResponse.json(
       {
         error: migrationPending
-          ? "Locations database migration is pending. Run supabase/production_locations.sql in Supabase SQL Editor, then restart the app."
+          ? "Locations database migration is pending. Run supabase/production_final.sql in Supabase SQL Editor, then restart the app."
           : "Unable to load locations.",
       },
       { status: 500 },
