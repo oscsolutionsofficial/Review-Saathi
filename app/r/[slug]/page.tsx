@@ -45,7 +45,7 @@ export default async function ReviewPage({
   return (
     <ReviewForm
       slug={slug}
-      businessName={tenant.name}
+      businessName={profile?.name || tenant.name}
       city={profile?.city ?? ""}
       logoUrl={logoUrl}
       languages={languages}
