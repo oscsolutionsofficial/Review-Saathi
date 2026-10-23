@@ -40,6 +40,7 @@ export async function GET() {
       "id,name,slug,business_type,city,place_id,logo_url,languages,services,custom_tags,is_active,created_at",
     )
     .eq("tenant_id", auth.tenantId)
+    .order("is_active", { ascending: false })
     .order("created_at");
   if (error) {
     console.error("Locations load failed", error);
@@ -138,8 +139,15 @@ export async function PATCH(request: Request) {
   if (auth.error) return auth.error;
   const access = await getTenantPlanAccess(auth.admin, auth.tenantId);
   if (!hasPlanFeature(access, "multiple_locations")) return NextResponse.json({ error: "Multiple locations are not included in your plan." }, { status: 403 });
-  const body = await request.json().catch(() => null) as { id?: string; name?: string; business_type?: string; city?: string; place_id?: string; logo_url?: string; languages?: string[]; services?: string[]; custom_tags?: string[] } | null;
+  const body = await request.json().catch(() => null) as { id?: string; name?: string; business_type?: string; city?: string; place_id?: string; logo_url?: string; languages?: string[]; services?: string[]; custom_tags?: string[]; is_active?: boolean } | null;
   const id = String(body?.id || "");
+  if (body?.is_active === true) {
+    const { count } = await auth.admin.from("locations").select("id", { count: "exact", head: true }).eq("tenant_id", auth.tenantId).eq("is_active", true);
+    if ((count ?? 0) >= Number(access.plan?.max_locations || 1)) return NextResponse.json({ error: "Your plan location limit is complete." }, { status: 402 });
+    const { error } = await auth.admin.from("locations").update({ is_active: true }).eq("id", id).eq("tenant_id", auth.tenantId);
+    if (error) return NextResponse.json({ error: "Unable to restore location." }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
   const name = String(body?.name || "").trim().slice(0, 120);
   if (!id || name.length < 2) return NextResponse.json({ error: "A valid location id and name are required." }, { status: 400 });
   const { error } = await auth.admin.from("locations").update({ name, business_type: String(body?.business_type || "").trim(), city: String(body?.city || "").trim(), place_id: String(body?.place_id || "").trim() || null, logo_url: /^https?:\/\//i.test(String(body?.logo_url || "")) ? String(body?.logo_url).trim() : null, languages: Array.isArray(body?.languages) && body.languages.length ? body.languages.slice(0, 20) : ["English"], services: Array.isArray(body?.services) ? body.services.slice(0, 20) : [], custom_tags: Array.isArray(body?.custom_tags) ? body.custom_tags.slice(0, 20) : [] }).eq("id", id).eq("tenant_id", auth.tenantId);

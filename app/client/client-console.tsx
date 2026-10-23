@@ -909,12 +909,20 @@ function Locations({ data }: { data: WorkspaceData }) {
     finally { setSaving(false); }
   }
   async function disableLocation(location: any) {
-    if (!window.confirm(`Disable ${location.name}? Existing scans and reports will remain safe.`)) return;
+    if (!window.confirm(`Archive ${location.name}? Existing scans and reports will remain safe.`)) return;
     setMessage("");
     const response = await fetch("/api/client/locations", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: location.id }) });
     const body = await readJson(response);
     if (!response.ok) { setMessage(body.error || "Unable to disable location."); return; }
-    setLocations(current => current.filter(item => item.id !== location.id)); setMessage("Location disabled. Existing data was kept.");
+    setLocations(current => current.filter(item => item.id !== location.id)); setMessage("Location archived. Existing data was kept.");
+  }
+  async function restoreLocation(location: any) {
+    setMessage("");
+    const response = await fetch("/api/client/locations", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: location.id, is_active: true }) });
+    const body = await readJson(response);
+    if (!response.ok) { setMessage(body.error || "Unable to restore location."); return; }
+    const refreshed = await fetch("/api/client/locations", { cache: "no-store" });
+    const next = await readJson(refreshed); setLocations(next.locations || []); setMessage("Location restored.");
   }
   return (
     <>
@@ -942,14 +950,15 @@ function Locations({ data }: { data: WorkspaceData }) {
               <div className="location-title-row">
                 <div>
                   <strong>{location.name}</strong>
+                  <span className={`location-status ${location.is_active ? "location-status-active" : "location-status-archived"}`}>{location.is_active ? "Active" : "Archived"}</span>
                   <small>{location.business_type || "Business location"}{location.city ? ` · ${location.city}` : ""}</small>
                 </div>
               <div className="location-actions">
                 <button className="btn btn-light btn-small" type="button" onClick={() => { setMessage(""); setEditing(location); }}>Edit</button>
-                <button className="btn btn-light btn-small btn-danger-soft" type="button" onClick={() => void disableLocation(location)}>Archive</button>
+                {location.is_active ? <button className="btn btn-light btn-small btn-danger-soft" type="button" onClick={() => void disableLocation(location)}>Archive</button> : <button className="btn btn-light btn-small btn-restore" type="button" onClick={() => void restoreLocation(location)}>Restore</button>}
               </div>
               </div>
-              {qrImages[location.id] && (
+              {location.is_active && qrImages[location.id] && (
                 <div className="location-qr-row">
                   <img className="client-qr-image" src={qrImages[location.id]} alt={`${location.name} review QR`} />
                   <div className="location-qr-info"><a className="btn btn-outline" href={qrImages[location.id]} download={`${location.slug}-review-qr.png`}>Download QR</a><small>Public review link</small><code>/r/{location.slug}</code></div>

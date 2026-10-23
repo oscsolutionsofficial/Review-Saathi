@@ -2256,6 +2256,10 @@ body:has(.hero) .hero-visual::after { background: linear-gradient(90deg, rgba(25
 .location-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .location-title-row strong { display: block; font-size: 18px; }
 .location-title-row small, .location-qr-info small { display: block; color: var(--muted); font-size: 12px; margin-top: 5px; }
+.location-status { display: inline-flex; margin-top: 9px; padding: 4px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; }
+.location-status-active { color: #08764f; background: #e2f6eb; }
+.location-status-archived { color: #8a5a19; background: #fff2d7; }
+.btn-restore { color: #08764f; border-color: #b9dfc8; }
 .location-item-main > small { display: none; }
 .location-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .location-badges span { padding: 4px 8px; border: 1px solid #d7ebe6; border-radius: 999px; color: #176f6d; background: #f0faf7; font-size: 11px; }
