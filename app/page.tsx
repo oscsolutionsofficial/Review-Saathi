@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
+import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { getPlanPeriodLabel, getPlanPeriodSuffix } from "@/lib/plan-period";
 
 export const dynamic = "force-dynamic";
@@ -18,10 +19,21 @@ type PublicPlan = { id: string; name: string; price: number; duration_days: numb
 
 async function getPublicPlans(): Promise<PublicPlan[]> {
   try {
-    const supabase = await createSupabaseServerClient();
-    const { data, error } = await supabase.from("plans").select("id,name,price,duration_days,max_scans_per_month,features").eq("is_active", true).order("price", { ascending: true });
-    if (error) return [];
-    return (data || []) as PublicPlan[];
+    const loadPlans = unstable_cache(
+      async () => {
+        const supabase = createSupabaseAdmin();
+        const { data, error } = await supabase
+          .from("plans")
+          .select("id,name,price,duration_days,max_scans_per_month,features")
+          .eq("is_active", true)
+          .order("price", { ascending: true });
+        if (error) return [];
+        return (data || []) as PublicPlan[];
+      },
+      ["public-plans"],
+      { revalidate: 60 },
+    );
+    return await loadPlans();
   } catch {
     return [];
   }
