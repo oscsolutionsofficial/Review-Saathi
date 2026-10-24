@@ -21,7 +21,7 @@ export default async function ReviewPage({
       return { tenant: resolved.tenant, profile: resolved.location, access };
     },
     ["public-review-config", slug],
-    { revalidate: 60 },
+    { revalidate: 60, tags: [`public-review-config:${slug}`] },
   );
   const config = await loadReviewConfig();
   const tenant = config?.tenant;

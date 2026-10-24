@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { revalidateTag } from "next/cache";
 
 export async function POST(request: Request) {
   const form = await request.formData(); const supabase = await createSupabaseServerClient();
@@ -8,7 +9,7 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(new URL("/login", request.url), { status: 303 });
   const admin = createSupabaseAdmin();
-  const { data: member, error: memberError } = await admin.from("users").select("tenant_id").eq("id", user.id).maybeSingle();
+  const { data: member, error: memberError } = await admin.from("users").select("tenant_id,tenants(slug)").eq("id", user.id).maybeSingle();
   if (memberError) return NextResponse.redirect(new URL(`${returnPath}?error=save`, request.url), { status: 303 });
   if (!member?.tenant_id) return NextResponse.redirect(new URL("/onboarding?error=no-tenant", request.url), { status: 303 });
   const name = String(form.get("name") ?? "").trim();
@@ -24,5 +25,14 @@ export async function POST(request: Request) {
   if (tenantError) return NextResponse.redirect(new URL(`${returnPath}?error=save`, request.url), { status: 303 });
   const { error: profileError } = await admin.from("profiles").upsert({ tenant_id: member.tenant_id, place_id: String(form.get("place_id") ?? "").trim() || null, logo_url: /^https?:\/\//i.test(logoUrl) ? logoUrl : null, business_type: businessType, city, languages: languages.length ? languages : ["English"], services, custom_tags: customTags, welcome_message: String(form.get("welcome_message") ?? "").trim() || null }, { onConflict: "tenant_id" });
   if (profileError) return NextResponse.redirect(new URL(`${returnPath}?error=save`, request.url), { status: 303 });
+  const tenant = Array.isArray(member.tenants) ? member.tenants[0] : member.tenants;
+  if (tenant?.slug) {
+    await admin
+      .from("locations")
+      .update({ languages: languages.length ? languages : ["English"] })
+      .eq("tenant_id", member.tenant_id)
+      .eq("slug", tenant.slug);
+    revalidateTag(`public-review-config:${tenant.slug}`);
+  }
   return NextResponse.redirect(new URL(`${returnPath}?saved=1`, request.url), { status: 303 });
 }

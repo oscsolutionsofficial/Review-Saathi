@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getTenantPlanAccess, hasPlanFeature } from "@/lib/plan-access";
@@ -139,7 +140,7 @@ export async function PATCH(request: Request) {
   if (auth.error) return auth.error;
   const access = await getTenantPlanAccess(auth.admin, auth.tenantId);
   if (!hasPlanFeature(access, "multiple_locations")) return NextResponse.json({ error: "Multiple locations are not included in your plan." }, { status: 403 });
-  const body = await request.json().catch(() => null) as { id?: string; name?: string; business_type?: string; city?: string; place_id?: string; logo_url?: string; languages?: string[]; services?: string[]; custom_tags?: string[]; is_active?: boolean } | null;
+  const body = await request.json().catch(() => null) as { id?: string; slug?: string; name?: string; business_type?: string; city?: string; place_id?: string; logo_url?: string; languages?: string[]; services?: string[]; custom_tags?: string[]; is_active?: boolean } | null;
   const id = String(body?.id || "");
   if (body?.is_active === true) {
     const { count } = await auth.admin.from("locations").select("id", { count: "exact", head: true }).eq("tenant_id", auth.tenantId).eq("is_active", true);
@@ -152,6 +153,7 @@ export async function PATCH(request: Request) {
   if (!id || name.length < 2) return NextResponse.json({ error: "A valid location id and name are required." }, { status: 400 });
   const { error } = await auth.admin.from("locations").update({ name, business_type: String(body?.business_type || "").trim(), city: String(body?.city || "").trim(), place_id: String(body?.place_id || "").trim() || null, logo_url: /^https?:\/\//i.test(String(body?.logo_url || "")) ? String(body?.logo_url).trim() : null, languages: Array.isArray(body?.languages) && body.languages.length ? body.languages.slice(0, 20) : ["English"], services: Array.isArray(body?.services) ? body.services.slice(0, 20) : [], custom_tags: Array.isArray(body?.custom_tags) ? body.custom_tags.slice(0, 20) : [] }).eq("id", id).eq("tenant_id", auth.tenantId);
   if (error) return NextResponse.json({ error: "Unable to update location." }, { status: 500 });
+  if (body?.slug) revalidateTag(`public-review-config:${body.slug}`);
   return NextResponse.json({ ok: true });
 }
 
