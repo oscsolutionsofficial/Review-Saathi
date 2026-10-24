@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
 import { getPlanPeriodLabel, getPlanPeriodSuffix } from "@/lib/plan-period";
+import { SUPPORTED_REVIEW_LANGUAGES } from "@/lib/review-languages";
 
 type Tab = "dashboard" | "reviews" | "qr" | "locations" | "renew" | "settings";
 type WorkspaceData = Record<string, any>;
@@ -981,7 +982,7 @@ function Locations({ data }: { data: WorkspaceData }) {
         <div className="location-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditing(null); }}>
         <form className="client-card client-settings-form location-editor-modal" onSubmit={saveLocation}>
           <div className="client-card-heading"><div><h2>Edit {editing.name}</h2><p>Update branch details without changing its public QR link.</p></div><button className="btn btn-light" type="button" onClick={() => setEditing(null)}>Cancel</button></div>
-          <div className="client-form-grid"><Field id="edit-location-name" name="name" label="Location name" value={editing.name || ""} required/><Field id="edit-location-type" name="business_type" label="Business type" value={editing.business_type || ""} required/><Field id="edit-location-city" name="city" label="City / area" value={editing.city || ""} required/><Field id="edit-location-place-id" name="place_id" label="Google Place ID or review link" value={editing.place_id || ""}/><Field id="edit-location-logo" name="logo_url" label="Branch logo URL" value={editing.logo_url || ""} wide/><Field id="edit-location-languages" name="languages" label="Review languages" value={(editing.languages || ["English"]).join(", ")} wide/><Field id="edit-location-services" name="services" label="Facilities / services" value={(editing.services || []).join(", ")} wide/><Field id="edit-location-tags" name="custom_tags" label="Review tags" value={(editing.custom_tags || []).join(", ")} wide/></div>
+          <div className="client-form-grid"><Field id="edit-location-name" name="name" label="Location name" value={editing.name || ""} required/><Field id="edit-location-type" name="business_type" label="Business type" value={editing.business_type || ""} required/><Field id="edit-location-city" name="city" label="City / area" value={editing.city || ""} required/><Field id="edit-location-place-id" name="place_id" label="Google Place ID or review link" value={editing.place_id || ""}/><Field id="edit-location-logo" name="logo_url" label="Branch logo URL" value={editing.logo_url || ""} wide/><LanguagePicker name="languages" label="Review languages" value={editing.languages || ["English"]} wide/><Field id="edit-location-services" name="services" label="Facilities / services" value={(editing.services || []).join(", ")} wide/><Field id="edit-location-tags" name="custom_tags" label="Review tags" value={(editing.custom_tags || []).join(", ")} wide/></div>
           <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Save location"}</button>
         </form>
         </div>
@@ -1104,11 +1105,10 @@ function Settings({
             label="Logo image URL"
             value={profile.logo_url || ""}
           />
-          <Field
-            id="languages"
+          <LanguagePicker
             name="languages"
             label="Review languages"
-            value={(profile.languages || ["English"]).join(", ")}
+            value={profile.languages || ["English"]}
           />
           <Field
             id="custom-tags"
@@ -1151,6 +1151,52 @@ function Settings({
     </>
   );
 }
+function LanguagePicker({
+  name,
+  label,
+  value,
+  wide,
+}: {
+  name: string;
+  label: string;
+  value: string[];
+  wide?: boolean;
+}) {
+  const [selected, setSelected] = useState<string[]>(
+    value.length ? value : ["English"],
+  );
+  return (
+    <div className={`field language-picker ${wide ? "span-2" : ""}`}>
+      <span className="field-label">{label}</span>
+      <input type="hidden" name={name} value={selected.join(", ")} />
+      <div className="language-picker-options" aria-label={label}>
+        {SUPPORTED_REVIEW_LANGUAGES.map((language) => {
+          const checked = selected.includes(language);
+          return (
+            <label className={`language-choice ${checked ? "selected" : ""}`} key={language}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => {
+                  setSelected((current) => {
+                    if (checked) {
+                      const next = current.filter((item) => item !== language);
+                      return next.length ? next : ["English"];
+                    }
+                    return [...current, language];
+                  });
+                }}
+              />
+              <span>{language}</span>
+            </label>
+          );
+        })}
+      </div>
+      <small className="field-help">Select all languages your customers can use.</small>
+    </div>
+  );
+}
+
 function Field({
   id,
   name,

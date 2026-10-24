@@ -11,7 +11,7 @@ const faqs = [
   ["□", "What is private feedback?", "Private feedback lets owners hear concerns without hiding public reviews."],
   ["⚙", "Does Review Saathi post reviews automatically?", "No. Customers always review, edit and submit the review themselves."],
   ["⌖", "Can I use one QR for multiple locations?", "Yes. Business plans support multiple locations and separate reporting."],
-  ["文", "Can customers write in Hindi?", "Yes. Review flows support English, Hindi, Hinglish, Rajasthani and Gujarati."],
+      ["文", "Can customers write in Hindi?", "Yes. Review flows support eight languages, including English, Hindi, Hinglish, Rajasthani, Gujarati, Punjabi, Marathi and Bengali."],
   ["↻", "Can I cancel or renew my plan?", "Yes. You can renew or change your plan from your account workspace."],
 ];
 

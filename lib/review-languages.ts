@@ -4,6 +4,9 @@ export const SUPPORTED_REVIEW_LANGUAGES = [
   "Hinglish",
   "Rajasthani",
   "Gujarati",
+  "Punjabi",
+  "Marathi",
+  "Bengali",
 ] as const;
 
 export function getAllowedReviewLanguages(

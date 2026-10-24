@@ -67,6 +67,7 @@ export default function ReviewForm({
   const [scanLimitReached, setScanLimitReached] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
+  const [languageOpenUp, setLanguageOpenUp] = useState(false);
   const languageMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -251,13 +252,22 @@ export default function ReviewForm({
               type="button"
               aria-haspopup="listbox"
               aria-expanded={languageOpen}
-              onClick={() => setLanguageOpen((open) => !open)}
+              onClick={(event) => {
+                const nextOpen = !languageOpen;
+                if (nextOpen) {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const spaceBelow = window.innerHeight - rect.bottom;
+                  const spaceAbove = rect.top;
+                  setLanguageOpenUp(spaceBelow < 360 && spaceAbove > spaceBelow);
+                }
+                setLanguageOpen(nextOpen);
+              }}
             >
               <span>{language}</span>
               <span className={`language-chevron ${languageOpen ? "open" : ""}`} aria-hidden="true">⌄</span>
             </button>
             {languageOpen && (
-              <div className="language-options" role="listbox" aria-labelledby="review-language">
+              <div className={`language-options ${languageOpenUp ? "open-up" : ""}`} role="listbox" aria-labelledby="review-language">
                 {languages.map((item) => (
                   <button
                     className={`language-option ${language === item ? "selected" : ""}`}

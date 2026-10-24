@@ -2951,6 +2951,13 @@ body:has(.hero) .hero-visual::after { background: linear-gradient(90deg, rgba(25
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 14px 30px rgba(18, 50, 77, .16);
+  max-height: min(360px, 45vh);
+  overflow-y: auto;
+}
+
+.language-options.open-up {
+  top: auto;
+  bottom: calc(100% + 8px);
 }
 
 .language-option {
@@ -3008,5 +3015,52 @@ body:has(.hero) .hero-visual::after { background: linear-gradient(90deg, rgba(25
 @keyframes loading-shimmer {
   from { background-position: 200% 0; }
   to { background-position: -200% 0; }
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #12324d;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.language-picker-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.language-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border: 1px solid #d6e1de;
+  border-radius: 999px;
+  background: #fff;
+  color: #496b7b;
+  cursor: pointer;
+  font-size: 13px;
+  transition: .2s ease;
+}
+
+.language-choice input {
+  accent-color: #0f8b8d;
+  margin: 0;
+}
+
+.language-choice.selected {
+  border-color: #0f8b8d;
+  background: #e7f6f2;
+  color: #087f81;
+  font-weight: 700;
+}
+
+.field-help {
+  display: block;
+  margin-top: 8px;
+  color: #6c8794;
+  font-size: 12px;
 }
 
