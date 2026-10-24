@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       .update({ languages: languages.length ? languages : ["English"] })
       .eq("tenant_id", member.tenant_id)
       .eq("slug", tenant.slug);
-    revalidateTag(`public-review-config:${tenant.slug}`);
+    revalidateTag(`public-review-config:${tenant.slug}`, "max");
   }
   return NextResponse.redirect(new URL(`${returnPath}?saved=1`, request.url), { status: 303 });
 }

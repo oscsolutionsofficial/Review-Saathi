@@ -153,7 +153,7 @@ export async function PATCH(request: Request) {
   if (!id || name.length < 2) return NextResponse.json({ error: "A valid location id and name are required." }, { status: 400 });
   const { error } = await auth.admin.from("locations").update({ name, business_type: String(body?.business_type || "").trim(), city: String(body?.city || "").trim(), place_id: String(body?.place_id || "").trim() || null, logo_url: /^https?:\/\//i.test(String(body?.logo_url || "")) ? String(body?.logo_url).trim() : null, languages: Array.isArray(body?.languages) && body.languages.length ? body.languages.slice(0, 20) : ["English"], services: Array.isArray(body?.services) ? body.services.slice(0, 20) : [], custom_tags: Array.isArray(body?.custom_tags) ? body.custom_tags.slice(0, 20) : [] }).eq("id", id).eq("tenant_id", auth.tenantId);
   if (error) return NextResponse.json({ error: "Unable to update location." }, { status: 500 });
-  if (body?.slug) revalidateTag(`public-review-config:${body.slug}`);
+  if (body?.slug) revalidateTag(`public-review-config:${body.slug}`, "max");
   return NextResponse.json({ ok: true });
 }
 
