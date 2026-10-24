@@ -49,6 +49,12 @@ async function handleWorkspaceRequest(request: Request) {
   const access = await getTenantPlanAccess(supabase, tenantId);
   const today = new Date().toISOString().slice(0, 10);
   if (tab === "dashboard") {
+    if (!hasPlanFeature(access, "basic_reports"))
+      return NextResponse.json({
+        tenant,
+        features: access.features,
+        reportsEnabled: false,
+      });
     const [
       { data: profile },
       { data: subscription },
@@ -153,6 +159,18 @@ async function handleWorkspaceRequest(request: Request) {
     });
   }
   if (tab === "reviews") {
+    if (!hasPlanFeature(access, "basic_reports"))
+      return NextResponse.json({
+        tenant,
+        features: access.features,
+        reportsEnabled: false,
+        scans: [],
+        feedback: [],
+        page: 1,
+        pageSize: 20,
+        hasMoreScans: false,
+        hasMoreFeedback: false,
+      });
     const page = Math.max(
       Number(new URL(request.url).searchParams.get("page") || 1),
       1,
@@ -191,6 +209,12 @@ async function handleWorkspaceRequest(request: Request) {
     });
   }
   if (tab === "qr") {
+    if (!hasPlanFeature(access, "qr"))
+      return NextResponse.json({
+        tenant,
+        features: access.features,
+        qrEnabled: false,
+      });
     const { data: profile } = await supabase
       .from("profiles")
       .select("business_type,city")
@@ -203,6 +227,7 @@ async function handleWorkspaceRequest(request: Request) {
     const response = NextResponse.json({
       tenant,
       profile,
+      qrEnabled: true,
       dataUrl: "",
       reviewPath,
       publicReviewUrl: reviewPath ? `${siteUrl}${reviewPath}` : "",

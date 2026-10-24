@@ -88,6 +88,7 @@ export default function ClientConsole({ initialTab }: { initialTab: Tab }) {
   const [open, setOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [support, setSupport] = useState<{ priority: boolean; whatsapp: string }>({ priority: false, whatsapp: "" });
   const accountRef = useRef<HTMLDivElement>(null);
 
   async function load(tab: Tab, force = false) {
@@ -125,6 +126,7 @@ export default function ClientConsole({ initialTab }: { initialTab: Tab }) {
 
   useEffect(() => {
     void load(initialTab);
+    void fetch("/api/client/support", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((value) => { if (value) setSupport(value); }).catch(() => undefined);
     const onPopState = () => {
       const next = tabFromPath(window.location.pathname);
       setActive(next);
@@ -250,11 +252,40 @@ export default function ClientConsole({ initialTab }: { initialTab: Tab }) {
               </button>
             ))}
           </nav>
-          <div className="console-sidebar-foot">
+          <a className="console-sidebar-foot" href={support.priority && support.whatsapp ? `https://wa.me/${support.whatsapp}?text=${encodeURIComponent("Hello Review Saathi, I need priority support.")}` : "mailto:hello@reviewsaathi.in"} target={support.priority && support.whatsapp ? "_blank" : undefined} rel={support.priority && support.whatsapp ? "noreferrer" : undefined}>
             <span>Need help?</span>
-            <strong>Contact support →</strong>
-          </div>
+            <strong className={support.priority && support.whatsapp ? "whatsapp-support-link" : undefined}>
+              {support.priority && support.whatsapp && (
+                <span className="whatsapp-support-mark" aria-label="WhatsApp support" title="WhatsApp support">
+                  <svg viewBox="0 0 24 24" role="presentation">
+                    <circle className="whatsapp-glyph-bg" cx="12" cy="12" r="9.5" />
+                    <path className="whatsapp-glyph-bubble" d="M7.15 16.85 6.3 19.7l2.78-.9A7.85 7.85 0 1 0 7.15 16.85Z" />
+                    <path className="whatsapp-glyph-phone" d="M9.3 7.6c.2-.3.35-.3.58-.3h.4c.17 0 .3.08.38.28l.62 1.47c.08.18.06.34-.07.49l-.44.5c-.1.11-.11.24-.03.4.27.5.97 1.42 2.22 1.96.17.07.29.05.4-.07l.55-.62c.12-.14.26-.15.43-.07l1.32.62c.17.08.23.2.19.4-.12.57-.5 1.01-1.06 1.2-.43.14-.95.09-1.48-.11-1.08-.4-2-1.08-2.79-1.9-.66-.69-1.19-1.46-1.45-2.12-.23-.6-.2-1.18.23-2.13Z" />
+                    <path d="M6.7 17.3 5.5 21l3.8-1.2a8.8 8.8 0 1 0-2.6-2.5Zm2.1-7.8c.2-.4.4-.4.7-.4h.5c.2 0 .4.1.5.4l.7 1.7c.1.2.1.4-.1.6l-.5.6c-.1.2-.1.3 0 .5.3.6 1.2 1.8 2.9 2.4.2.1.3 0 .5-.1l.6-.7c.2-.2.4-.2.6-.1l1.6.8c.2.1.3.3.2.6-.1.7-.7 1.4-1.4 1.6-.5.1-1.2.1-2-.2-1.4-.5-2.6-1.4-3.6-2.5-.8-.9-1.6-2.1-1.8-2.9-.2-.7-.1-1.4.3-2.3Z" />
+                  </svg>
+                </span>
+              )}
+              {support.priority && support.whatsapp ? "WhatsApp support →" : "Contact support →"}
+            </strong>
+          </a>
         </aside>
+        {support.priority && support.whatsapp && (
+          <a
+            className="mobile-support-fab"
+            href={`https://wa.me/${support.whatsapp}?text=${encodeURIComponent("Hello Review Saathi, I need priority support.")}`}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="WhatsApp support"
+            title="WhatsApp support"
+          >
+            <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+              <circle className="whatsapp-glyph-bg" cx="12" cy="12" r="9.5" />
+              <path className="whatsapp-glyph-bubble" d="M7.15 16.85 6.3 19.7l2.78-.9A7.85 7.85 0 1 0 7.15 16.85Z" />
+              <path className="whatsapp-glyph-phone" d="M9.3 7.6c.2-.3.35-.3.58-.3h.4c.17 0 .3.08.38.28l.62 1.47c.08.18.06.34-.07.49l-.44.5c-.1.11-.11.24-.03.4.27.5.97 1.42 2.22 1.96.17.07.29.05.4-.07l.55-.62c.12-.14.26-.15.43-.07l1.32.62c.17.08.23.2.19.4-.12.57-.5 1.01-1.06 1.2-.43.14-.95.09-1.48-.11-1.08-.4-2-1.08-2.79-1.9-.66-.69-1.19-1.46-1.45-2.12-.23-.6-.2-1.18.23-2.13Z" />
+              <path d="M6.7 17.3 5.5 21l3.8-1.2a8.8 8.8 0 1 0-2.6-2.5Zm2.1-7.8c.2-.4.4-.4.7-.4h.5c.2 0 .4.1.5.4l.7 1.7c.1.2.1.4-.1.6l-.5.6c-.1.2-.1.3 0 .5.3.6 1.2 1.8 2.9 2.4.2.1.3 0 .5-.1l.6-.7c.2-.2.4-.2.6-.1l1.6.8c.2.1.3.3.2.6-.1.7-.7 1.4-1.4 1.6-.5.1-1.2-.1-2-.2-1.4-.5-2.6-1.4-3.6-2.5-.8-.9-1.6-2.1-1.8-2.9-.2-.7-.1-1.4.3-2.3Z" />
+            </svg>
+          </a>
+        )}
         <section className="console-main client-console-main">
           {loading && !data ? (
             <div className="data-loading" aria-live="polite">
@@ -326,6 +357,13 @@ function Dashboard({ data }: { data: WorkspaceData }) {
   const plan = Array.isArray(data.subscription?.plans)
     ? data.subscription?.plans[0]
     : data.subscription?.plans;
+  if (data.reportsEnabled === false)
+    return (
+      <>
+        <Heading title="Dashboard" description="Monitor your customer feedback and review activity." />
+        <FeatureLocked title="Basic reports are not included" text="Upgrade your plan to view dashboard metrics and customer activity." />
+      </>
+    );
   return (
     <>
       <Heading
@@ -468,6 +506,13 @@ function Reviews({ data }: { data: WorkspaceData }) {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [hasMore, loadingMore, page]);
+  if (data.reportsEnabled === false)
+    return (
+      <>
+        <Heading title="Reviews & feedback" description="See ratings and private customer messages collected through your QR code." />
+        <FeatureLocked title="Basic reports are not included" text="Upgrade your plan to view ratings, reviews and feedback reports." />
+      </>
+    );
   return (
     <>
       <Heading
@@ -619,6 +664,13 @@ function Qr({ data }: { data: WorkspaceData }) {
       .catch(() => setQrDataUrl(""));
   }, [url]);
   const qrImage = qrDataUrl || data.dataUrl;
+  if (data.qrEnabled === false)
+    return (
+      <>
+        <Heading title="QR code" description="Use one dynamic QR code to collect customer feedback." />
+        <FeatureLocked title="QR review collection is not included" text="Upgrade your plan to generate and download a review QR code." />
+      </>
+    );
   return (
     <>
       <Heading
@@ -705,6 +757,19 @@ function Qr({ data }: { data: WorkspaceData }) {
         </section>
       </div>
     </>
+  );
+}
+
+function FeatureLocked({ title, text }: { title: string; text: string }) {
+  return (
+    <section className="client-card feature-locked-card">
+      <div className="feature-locked-icon">↗</div>
+      <div className="feature-locked-copy">
+        <h2>{title}</h2>
+        <p>{text}</p>
+        <a className="btn btn-primary" href="/client/renew">View upgrade options</a>
+      </div>
+    </section>
   );
 }
 function Renew({ data }: { data: WorkspaceData }) {

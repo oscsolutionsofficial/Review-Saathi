@@ -546,7 +546,7 @@ function description(tab: Tab) {
     Renewals: "Review renewal requests from client accounts.",
     Payments: "Track recorded payments from the database.",
     "Audit log": "Every important admin action, visible and traceable.",
-    Settings: "Manage platform defaults and operational preferences.",
+    Settings: "Platform settings.",
   }[tab];
 }
 function Loading() {
@@ -1175,6 +1175,8 @@ function Settings({
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
+  const [supportWhatsapp, setSupportWhatsapp] = useState(String(settings.support_whatsapp || ""));
+  const [supportMessage, setSupportMessage] = useState("");
   async function save(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
@@ -1239,6 +1241,19 @@ function Settings({
       setPasswordSaving(false);
     }
   }
+  async function saveSupport(event: React.FormEvent) {
+    event.preventDefault();
+    setSupportMessage("");
+    try {
+      const response = await fetch("/api/admin/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ whatsapp: supportWhatsapp }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to save support number.");
+      setSupportWhatsapp(result.whatsapp || "");
+      setSupportMessage("WhatsApp support number updated.");
+    } catch (reason) {
+      setSupportMessage(reason instanceof Error ? reason.message : "Unable to save support number.");
+    }
+  }
   const entries = Object.entries(settings).filter(
     ([key]) => key !== "admin_profile",
   );
@@ -1248,7 +1263,6 @@ function Settings({
         <div className="card-heading">
           <div>
             <h3>Admin profile</h3>
-            <p>Update the name shown across the admin workspace.</p>
           </div>
           <span className="settings-card-icon">SA</span>
         </div>
@@ -1274,9 +1288,6 @@ function Settings({
             />
           </div>
           <div className="settings-form-footer">
-            <span className="muted">
-              Email changes are disabled for account safety.
-            </span>
             <button className="btn btn-primary" disabled={saving}>
               {saving ? "Saving..." : "Save profile"}
             </button>
@@ -1292,7 +1303,6 @@ function Settings({
         <div className="card-heading">
           <div>
             <h3>Change password</h3>
-            <p>Use a strong password with at least 12 characters.</p>
           </div>
           <span className="settings-card-icon">•••</span>
         </div>
@@ -1322,9 +1332,6 @@ function Settings({
             />
           </div>
           <div className="settings-form-footer">
-            <span className="muted">
-              You will stay signed in after changing it.
-            </span>
             <button className="btn btn-primary" disabled={passwordSaving}>
               {passwordSaving ? "Updating..." : "Change password"}
             </button>
@@ -1334,6 +1341,20 @@ function Settings({
               {passwordMessage}
             </p>
           )}
+        </form>
+      </section>
+      <section className="console-card platform-settings-card">
+        <div className="card-heading">
+          <div><h3>WhatsApp support</h3></div>
+          <span className="settings-card-icon">WA</span>
+        </div>
+        <form onSubmit={saveSupport}>
+          <div className="field">
+            <label htmlFor="support-whatsapp">WhatsApp number</label>
+            <input id="support-whatsapp" value={supportWhatsapp} onChange={(event) => setSupportWhatsapp(event.target.value)} placeholder="919506779393" inputMode="numeric" />
+          </div>
+          <div className="settings-form-footer"><button className="btn btn-primary">Save number</button></div>
+          {supportMessage && <p className="settings-save-message" role="status">{supportMessage}</p>}
         </form>
       </section>
       <section className="console-card platform-settings-card">

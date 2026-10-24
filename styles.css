@@ -3104,3 +3104,143 @@ body:has(.hero) .hero-visual::after { background: linear-gradient(90deg, rgba(25
   font-size: 12px;
 }
 
+.feature-locked-card {
+  display: flex;
+  width: min(100%, 820px) !important;
+  max-width: 820px;
+  margin: 70px auto 0;
+  padding: 22px 26px;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(135deg, #ffffff 0%, #f3fbf8 100%);
+  border-color: #cfe8e1;
+}
+
+.feature-locked-icon {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  flex: 0 0 50px;
+  place-items: center;
+  border-radius: 13px;
+  background: #e7f6f2;
+  color: #0f8b8d;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.feature-locked-copy {
+  min-width: 0;
+  flex: 1;
+  text-align: center;
+}
+
+.feature-locked-card h2 {
+  margin: 2px 0 4px;
+  font-size: 24px;
+}
+
+.feature-locked-card p {
+  margin: 0 auto 14px;
+  color: #66808d;
+  font-size: 14px;
+}
+
+.feature-locked-copy .btn {
+  display: table;
+  margin: 0 auto;
+}
+
+.whatsapp-support-mark {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 50%;
+  background: #25d366;
+  vertical-align: middle;
+  box-shadow: 0 5px 12px rgba(37, 211, 102, .28);
+}
+
+.whatsapp-support-link {
+  font-size: 0;
+  text-align: center;
+}
+
+.whatsapp-support-link::after {
+  content: "Support";
+  display: block;
+  margin-top: 4px;
+  color: #087f80;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.console-sidebar-foot:has(.whatsapp-support-mark) > span:first-child { display: none; }
+
+.mobile-support-fab { display: none; }
+
+@media (min-width: 901px) {
+  .app-page.client-console-page .client-console-sidebar {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .app-page.client-console-page .console-sidebar-foot {
+    position: static;
+    margin-top: auto;
+  }
+
+  .app-page.client-console-page .console-sidebar-foot { position: relative; }
+  .app-page.client-console-page .whatsapp-support-link {
+    font-size: 0;
+    text-align: center;
+  }
+}
+
+.whatsapp-support-mark svg {
+  width: 26px;
+  height: 26px;
+  fill: #fff;
+}
+
+.whatsapp-support-mark svg .whatsapp-glyph-bg,
+.mobile-support-fab svg .whatsapp-glyph-bg { display: none; }
+.whatsapp-support-mark svg .whatsapp-glyph-bubble,
+.mobile-support-fab svg .whatsapp-glyph-bubble { fill: #fff; }
+.whatsapp-support-mark svg .whatsapp-glyph-phone,
+.mobile-support-fab svg .whatsapp-glyph-phone { fill: #25d366; }
+.whatsapp-support-mark svg > path:last-child,
+.mobile-support-fab svg > path:last-child { display: none; }
+
+@media (max-width: 900px) {
+  .app-page.client-console-page .mobile-support-fab {
+    position: fixed;
+    right: max(18px, env(safe-area-inset-right));
+    bottom: max(18px, env(safe-area-inset-bottom));
+    z-index: 80;
+    display: inline-grid;
+    width: 52px;
+    height: 52px;
+    place-items: center;
+    border-radius: 50%;
+    background: #25d366;
+    box-shadow: 0 8px 22px rgba(13, 86, 62, .28);
+  }
+
+  .app-page.client-console-page .mobile-support-fab svg {
+    width: 29px;
+    height: 29px;
+    fill: #fff;
+  }
+}
+
+@media (max-width: 640px) {
+  .feature-locked-card {
+    width: calc(100% - 32px) !important;
+    align-items: flex-start;
+    margin-top: 42px;
+    padding: 22px;
+  }
+}
+
