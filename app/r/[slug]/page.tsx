@@ -4,6 +4,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import ReviewForm from "./review-form";
 import { getTenantPlanAccess, hasPlanFeature } from "@/lib/plan-access";
 import { resolvePublicLocation } from "@/lib/location";
+import { getAllowedReviewLanguages } from "@/lib/review-languages";
 
 export default async function ReviewPage({
   params,
@@ -26,19 +27,10 @@ export default async function ReviewPage({
   const tenant = config?.tenant;
   if (!tenant || tenant.status !== "active") return notFound();
   const profile = config.profile;
-  const languages =
-    config.access && hasPlanFeature(config.access, "languages")
-      ? Array.from(
-          new Set([
-            ...(profile?.languages ?? []),
-            "English",
-            "Hindi",
-            "Hinglish",
-            "Rajasthani",
-            "Gujarati",
-          ]),
-        )
-      : ["English"];
+  const languages = getAllowedReviewLanguages(
+    profile?.languages,
+    Boolean(config.access && hasPlanFeature(config.access, "languages")),
+  );
   const logoUrl = profile?.logo_url
     ? `/api/public/logo?url=${encodeURIComponent(profile.logo_url)}`
     : "";

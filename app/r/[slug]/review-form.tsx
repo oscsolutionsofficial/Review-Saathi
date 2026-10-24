@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
   slug: string;
@@ -66,6 +66,8 @@ export default function ReviewForm({
   const [error, setError] = useState("");
   const [scanLimitReached, setScanLimitReached] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const languageMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const field = document.querySelector<HTMLLabelElement>(
@@ -73,6 +75,15 @@ export default function ReviewForm({
     )?.parentElement;
     if (field) field.hidden = !allowPrivateFeedback;
   }, [allowPrivateFeedback]);
+
+  useEffect(() => {
+    function closeLanguageMenu(event: MouseEvent) {
+      if (!languageMenuRef.current?.contains(event.target as Node))
+        setLanguageOpen(false);
+    }
+    document.addEventListener("mousedown", closeLanguageMenu);
+    return () => document.removeEventListener("mousedown", closeLanguageMenu);
+  }, []);
 
   async function generateDraft() {
     if (!rating || loading || scanLimitReached) return;
@@ -233,15 +244,41 @@ export default function ReviewForm({
         </div>
         <div className="field">
           <label htmlFor="review-language">Choose review language</label>
-          <select
-            id="review-language"
-            value={language}
-            onChange={(event) => setLanguage(event.target.value)}
-          >
-            {languages.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
+          <div className="language-select" ref={languageMenuRef}>
+            <button
+              className="language-select-trigger"
+              id="review-language"
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={languageOpen}
+              onClick={() => setLanguageOpen((open) => !open)}
+            >
+              <span>{language}</span>
+              <span className={`language-chevron ${languageOpen ? "open" : ""}`} aria-hidden="true">⌄</span>
+            </button>
+            {languageOpen && (
+              <div className="language-options" role="listbox" aria-labelledby="review-language">
+                {languages.map((item) => (
+                  <button
+                    className={`language-option ${language === item ? "selected" : ""}`}
+                    key={item}
+                    type="button"
+                    role="option"
+                    aria-selected={language === item}
+                    onClick={() => {
+                      setLanguage(item);
+                      setLanguageOpen(false);
+                      setDrafts([]);
+                      setScanId("");
+                    }}
+                  >
+                    <span>{item}</span>
+                    {language === item && <span aria-hidden="true">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         {error && (
           <div className="auth-alert" role="alert">

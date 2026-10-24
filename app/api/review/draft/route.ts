@@ -5,6 +5,7 @@ import { reviewDraftSchema } from "@/lib/validation";
 import { allowRequestDistributed, requestIp } from "@/lib/rate-limit";
 import { getTenantPlanAccess, hasPlanFeature } from "@/lib/plan-access";
 import { resolvePublicLocation } from "@/lib/location";
+import { getAllowedReviewLanguages } from "@/lib/review-languages";
 
 export async function POST(request: Request) {
   if (
@@ -37,6 +38,15 @@ export async function POST(request: Request) {
   )
     return NextResponse.json(
       { error: "This plan supports English review drafts only." },
+      { status: 403 },
+    );
+  const allowedLanguages = getAllowedReviewLanguages(
+    resolved.location.languages,
+    hasPlanFeature(access, "languages"),
+  );
+  if (!allowedLanguages.includes(parsed.data.language as (typeof allowedLanguages)[number]))
+    return NextResponse.json(
+      { error: "This language is not enabled for this business." },
       { status: 403 },
     );
   const { data: subscription } = await admin
