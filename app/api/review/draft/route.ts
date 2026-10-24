@@ -39,6 +39,33 @@ export async function POST(request: Request) {
       { error: "This plan supports English review drafts only." },
       { status: 403 },
     );
+  const { data: subscription } = await admin
+    .from("subscriptions")
+    .select("start_date,plans(max_scans_per_month)")
+    .eq("tenant_id", tenant.id)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const plan = Array.isArray(subscription?.plans)
+    ? subscription?.plans[0]
+    : subscription?.plans;
+  const scanLimit = Number(plan?.max_scans_per_month || 0);
+  if (subscription?.start_date && scanLimit > 0) {
+    const { count: usedScans } = await admin
+      .from("scans")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenant.id)
+      .gte("created_at", subscription.start_date);
+    if ((usedScans ?? 0) >= scanLimit)
+      return NextResponse.json(
+        {
+          error:
+            "Your scan limit is complete. Please renew or upgrade your plan to continue scanning.",
+        },
+        { status: 402 },
+      );
+  }
   const { data: profile } = await admin
     .from("profiles")
     .select("business_type,city")

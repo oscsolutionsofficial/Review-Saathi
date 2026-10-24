@@ -64,6 +64,7 @@ export default function ReviewForm({
   const [loading, setLoading] = useState(false);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState("");
+  const [scanLimitReached, setScanLimitReached] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
 
   useEffect(() => {
@@ -74,7 +75,7 @@ export default function ReviewForm({
   }, [allowPrivateFeedback]);
 
   async function generateDraft() {
-    if (!rating || loading) return;
+    if (!rating || loading || scanLimitReached) return;
     setLoading(true);
     setError("");
     setDrafts([]);
@@ -103,7 +104,17 @@ export default function ReviewForm({
         }),
       });
       const scanData = await scanResponse.json();
-      if (scanResponse.ok && scanData.scanId) setScanId(scanData.scanId);
+      if (!scanResponse.ok || !scanData.scanId) {
+        setDrafts([]);
+        setScanId("");
+        if (scanResponse.status === 402 && scanData.error?.toLowerCase().includes("scan limit")) {
+          setScanLimitReached(true);
+        }
+        throw new Error(
+          scanData.error || "Your scan could not be started. Please try again.",
+        );
+      }
+      setScanId(scanData.scanId);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -240,7 +251,7 @@ export default function ReviewForm({
         <button
           className="btn btn-outline"
           type="button"
-          disabled={!rating || loading || posting}
+          disabled={!rating || loading || posting || scanLimitReached}
           onClick={generateDraft}
         >
           {loading ? "Creating 3 drafts…" : "Create 3 review drafts"}

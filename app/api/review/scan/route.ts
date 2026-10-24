@@ -87,7 +87,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             error:
-              "Your monthly scan limit is complete. Please renew or upgrade your plan.",
+              "Your scan limit is complete. Please renew or upgrade your plan to continue scanning.",
           },
           { status: 402 },
         );
