@@ -252,7 +252,7 @@ export default function ClientConsole({ initialTab }: { initialTab: Tab }) {
               </button>
             ))}
           </nav>
-          <a className="console-sidebar-foot" href={support.priority && support.whatsapp ? `https://wa.me/${support.whatsapp}?text=${encodeURIComponent("Hello Review Saathi, I need priority support.")}` : "mailto:hello@reviewsaathi.in"} target={support.priority && support.whatsapp ? "_blank" : undefined} rel={support.priority && support.whatsapp ? "noreferrer" : undefined}>
+          <a className="console-sidebar-foot" href={support.priority && support.whatsapp ? `https://wa.me/${support.whatsapp}?text=${encodeURIComponent("Hello Review Saathi, I need priority support.")}` : "mailto:oscsolutions.official@gmail.com"} target={support.priority && support.whatsapp ? "_blank" : undefined} rel={support.priority && support.whatsapp ? "noreferrer" : undefined}>
             <span>Need help?</span>
             <strong className={support.priority && support.whatsapp ? "whatsapp-support-link" : undefined}>
               {support.priority && support.whatsapp && (
