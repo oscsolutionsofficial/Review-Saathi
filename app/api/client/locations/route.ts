@@ -58,9 +58,48 @@ export async function GET() {
       { status: 500 },
     );
   }
+  let locations = data ?? [];
+  if (!locations.length) {
+    const [{ data: tenant }, { data: profile }] = await Promise.all([
+      auth.admin
+        .from("tenants")
+        .select("name,slug")
+        .eq("id", auth.tenantId)
+        .maybeSingle(),
+      auth.admin
+        .from("profiles")
+        .select("business_type,city,place_id,logo_url,languages,services,custom_tags,welcome_message")
+        .eq("tenant_id", auth.tenantId)
+        .maybeSingle(),
+    ]);
+    if (tenant?.slug) {
+      const { error: backfillError } = await auth.admin.from("locations").insert({
+        tenant_id: auth.tenantId,
+        name: tenant.name || "Main location",
+        slug: tenant.slug,
+        business_type: profile?.business_type || "",
+        city: profile?.city || "",
+        place_id: profile?.place_id || null,
+        logo_url: profile?.logo_url || null,
+        languages: profile?.languages?.length ? profile.languages : ["English"],
+        services: profile?.services || [],
+        custom_tags: profile?.custom_tags || [],
+        welcome_message: profile?.welcome_message || null,
+      });
+      if (!backfillError) {
+        const { data: backfilled } = await auth.admin
+          .from("locations")
+          .select("id,name,slug,business_type,city,place_id,logo_url,languages,services,custom_tags,is_active,created_at")
+          .eq("tenant_id", auth.tenantId)
+          .order("is_active", { ascending: false })
+          .order("created_at");
+        locations = backfilled ?? [];
+      }
+    }
+  }
   const access = await getTenantPlanAccess(auth.admin, auth.tenantId);
-  const activeCount = (data ?? []).filter((item) => item.is_active).length;
-  return NextResponse.json({ locations: data ?? [], canCreate: hasPlanFeature(access, "multiple_locations") && activeCount < Number(access.plan?.max_locations || 1), maxLocations: Number(access.plan?.max_locations || 1) });
+  const activeCount = locations.filter((item) => item.is_active).length;
+  return NextResponse.json({ locations, canCreate: hasPlanFeature(access, "multiple_locations") && activeCount < Number(access.plan?.max_locations || 1), maxLocations: Number(access.plan?.max_locations || 1) });
 }
 
 export async function POST(request: Request) {
