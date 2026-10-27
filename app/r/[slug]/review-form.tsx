@@ -102,6 +102,10 @@ export default function ReviewForm({
     if (loading || scanLimitReached) return;
     setLoading(true);
     setError("");
+    // Always start a new generation from the first returned draft. Reset this
+    // before the request as well as after it so an old selection can never be
+    // carried into the new draft set while the request is in flight.
+    setSelectedDraft(0);
     setDrafts([]);
     try {
       const response = await fetch("/api/review/draft", {
@@ -227,6 +231,7 @@ export default function ReviewForm({
               onClick={() => {
                 setRating(value);
                 setError("");
+                setSelectedDraft(0);
                 setDrafts([]);
                 setScanId("");
               }}
@@ -346,6 +351,7 @@ export default function ReviewForm({
                     onClick={() => {
                       setLanguage(item);
                       setLanguageOpen(false);
+                      setSelectedDraft(0);
                       setDrafts([]);
                       setScanId("");
                     }}
