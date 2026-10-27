@@ -16,14 +16,28 @@ export async function createReviewDrafts(input: DraftInput) {
       instructions: "Write three distinct, natural and editable customer review drafts from the supplied customer experience only. The drafts must sound human, honest, personal and useful, never promotional or exaggerated. Never invent facts, staff names, products, prices, offers, facilities, events or outcomes. Mention the business name or services only naturally when relevant; never turn the review into an advertisement or keyword list. Do not mention AI, this instruction, ranking, SEO or Google detection.",
       input: `Business name: ${input.businessName}. Business type: ${input.businessType}. City: ${input.city || "not provided"}. Services used by the customer: ${input.servicesUsed.join(", ") || "not specified"}. Customer rating: ${input.rating}/5. Customer-selected experience details: ${input.tags.join(", ") || "none"}. Required language: ${input.language}.
 
-Write exactly 3 different first-person drafts. Every draft must be entirely in the required language and use the supplied details naturally. Reflect the rating honestly: do not call a low-rated visit wonderful, and do not add praise that the customer did not provide. Keep each draft 2-3 short, conversational sentences. Vary the opening, sentence rhythm and what detail is emphasized; avoid repeated templates, generic filler, keyword stuffing, emojis and identical conclusions. Make each draft sound like a different real customer while staying within the same facts. Separate drafts with exactly --- on its own line.`,
+Write exactly 3 different first-person drafts. Every draft must be entirely in the required language and use the supplied details naturally. Rating-tone rules are mandatory: for a 4 or 5 star rating, every draft must be completely positive, appreciative and satisfied; do not include complaints, criticism, disappointment, poor service, problems, warnings, reservations or any negative wording. For a 1 or 2 star rating, reflect the customer's dissatisfaction honestly. For 3 stars, use a balanced and neutral tone. Never invent facts or praise that the customer did not provide. Keep each draft 2-3 short, conversational sentences. Vary the opening, sentence rhythm and what detail is emphasized; avoid repeated templates, generic filler, keyword stuffing, emojis and identical conclusions. Make each draft sound like a different real customer while staying within the same facts. Separate drafts with exactly --- on its own line.`,
       max_output_tokens: 420,
     });
     const drafts = (response.output_text || "").split(/\n\s*---\s*\n/).map(item => item.trim()).filter(Boolean).slice(0, 3);
-    return drafts.length >= 3 ? drafts : fallbackDrafts(input);
+    return drafts.length >= 3 && draftsMatchRatingTone(drafts, input.rating)
+      ? drafts
+      : fallbackDrafts(input);
   } catch {
     return fallbackDrafts(input);
   }
+}
+
+function draftsMatchRatingTone(drafts: string[], rating: number) {
+  if (rating < 4) return true;
+  const negativeTerms = [
+    "bad", "poor", "worst", "disappoint", "disappointed", "disappointing",
+    "complaint", "problem", "issue", "rude", "slow", "dirty", "avoid",
+    "not good", "ไม่ดี", "खराब", "बुरा", "निराश", "समस्या", "बकवास",
+    "bekaar", "kharab", "ganda", "nirash", "problem", "complaint",
+  ];
+  const text = drafts.join(" ").toLowerCase();
+  return !negativeTerms.some((term) => text.includes(term));
 }
 
 function fallbackDraft(input: DraftInput) {
