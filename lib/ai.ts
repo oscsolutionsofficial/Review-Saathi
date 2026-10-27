@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-type DraftInput = { businessType: string; city: string; rating: number; tags: string[]; language: string };
+type DraftInput = { businessName: string; businessType: string; city: string; rating: number; tags: string[]; servicesUsed: string[]; language: string };
 
 export async function createReviewDraft(input: DraftInput) {
   const drafts = await createReviewDrafts(input);
@@ -13,8 +13,8 @@ export async function createReviewDrafts(input: DraftInput) {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 8000, maxRetries: 1 });
     const response = await client.responses.create({
       model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      instructions: "Write three distinct, natural and editable customer review drafts from the supplied customer experience only. The drafts must be honest, personal and useful, never promotional or exaggerated. Never invent facts, staff names, products, prices, offers, facilities, events or outcomes. Do not mention AI, this instruction, ranking, SEO or Google detection.",
-      input: `Business type: ${input.businessType}. City: ${input.city || "not provided"}. Customer rating: ${input.rating}/5. Customer-selected details: ${input.tags.join(", ") || "none"}. Required language: ${input.language}.
+      instructions: "Write three distinct, natural and editable customer review drafts from the supplied customer experience only. The drafts must sound human, honest, personal and useful, never promotional or exaggerated. Never invent facts, staff names, products, prices, offers, facilities, events or outcomes. Mention the business name or services only naturally when relevant; never turn the review into an advertisement or keyword list. Do not mention AI, this instruction, ranking, SEO or Google detection.",
+      input: `Business name: ${input.businessName}. Business type: ${input.businessType}. City: ${input.city || "not provided"}. Services used by the customer: ${input.servicesUsed.join(", ") || "not specified"}. Customer rating: ${input.rating}/5. Customer-selected experience details: ${input.tags.join(", ") || "none"}. Required language: ${input.language}.
 
 Write exactly 3 different first-person drafts. Every draft must be entirely in the required language and use the supplied details naturally. Reflect the rating honestly: do not call a low-rated visit wonderful, and do not add praise that the customer did not provide. Keep each draft 2-3 short, conversational sentences. Vary the opening, sentence rhythm and what detail is emphasized; avoid repeated templates, generic filler, keyword stuffing, emojis and identical conclusions. Make each draft sound like a different real customer while staying within the same facts. Separate drafts with exactly --- on its own line.`,
       max_output_tokens: 420,
@@ -28,12 +28,14 @@ Write exactly 3 different first-person drafts. Every draft must be entirely in t
 
 function fallbackDraft(input: DraftInput) {
   const tags = input.tags.slice(0, 2).join(" and ").toLowerCase() || "the overall experience";
+  const services = input.servicesUsed.slice(0, 2).join(" and ");
+  const serviceText = services ? ` I used ${services} and was happy with the experience.` : "";
   if (input.language === "Hindi") return `मेरा अनुभव बहुत अच्छा रहा। मुझे ${tags} खास तौर पर पसंद आया। मैं फिर ज़रूर आऊंगा।`;
   if (input.language === "Hinglish") return `Experience kaafi accha raha. ${tags} especially pasand aaya. Main phir zarur aunga.`;
   if (input.language === "Punjabi") return `ਮੇਰਾ ਤਜਰਬਾ ਬਹੁਤ ਵਧੀਆ ਰਿਹਾ। ਮੈਨੂੰ ਸੇਵਾ ਖਾਸ ਤੌਰ 'ਤੇ ਪਸੰਦ ਆਈ। ਮੈਂ ਦੁਬਾਰਾ ਜ਼ਰੂਰ ਆਵਾਂਗਾ।`;
   if (input.language === "Marathi") return `माझा अनुभव खूप छान होता. मला सेवा विशेष आवडली. मी पुन्हा नक्की येईन.`;
   if (input.language === "Bengali") return `আমার অভিজ্ঞতা খুব ভালো ছিল। পরিষেবাটি আমার বিশেষ পছন্দ হয়েছে। আমি আবার আসব।`;
-  return `I had a ${input.rating >= 4 ? "wonderful" : "honest and memorable"} experience. I especially liked ${tags}. I would love to visit again.`;
+  return `I had a ${input.rating >= 4 ? "wonderful" : "honest and memorable"} experience${serviceText} I especially liked ${tags}. I would love to work with them again.`;
 }
 
 function fallbackDrafts(input: DraftInput) {

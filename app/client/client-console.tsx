@@ -13,11 +13,15 @@ const tabs: Array<[Tab, string, string]> = [
   ["reviews", "☆", "Reviews & feedback"],
   ["qr", "▦", "QR code"],
   ["renew", "↻", "Renewal"],
-  ["settings", "⚙", "Business profile"],
+  ["settings", "⚙", "My profile"],
 ];
 tabs.splice(3, 0, ["locations", "⌖", "Locations"]);
-const cache = new Map<Tab, WorkspaceData>();
-const pending = new Map<Tab, Promise<WorkspaceData>>();
+const cache = new Map<string, WorkspaceData>();
+const pending = new Map<string, Promise<WorkspaceData>>();
+
+function cacheKey(tab: Tab, locationId = "") {
+  return `${tab}:${locationId || "all"}`;
+}
 
 async function readJson(response: Response) {
   const text = await response.text();
@@ -37,15 +41,19 @@ function tabFromPath(path: string): Tab {
   return tabs.some(([key]) => key === value) ? value : "dashboard";
 }
 
-async function getTabData(tab: Tab, force = false) {
-  const existing = force ? undefined : cache.get(tab);
+async function getTabData(tab: Tab, force = false, locationId = "") {
+  const key = cacheKey(tab, locationId);
+  const existing = force ? undefined : cache.get(key);
   if (existing) return existing;
-  const running = pending.get(tab);
+  const running = pending.get(key);
   if (running) return running;
+  const query = new URLSearchParams({ tab });
+  if ((tab === "dashboard" || tab === "reviews") && locationId)
+    query.set("location", locationId);
   const request = fetch(
     tab === "locations"
       ? "/api/client/locations"
-      : `/api/client/workspace?tab=${tab}`,
+      : `/api/client/workspace?${query.toString()}`,
     {
       cache: "no-store",
     },
@@ -54,11 +62,11 @@ async function getTabData(tab: Tab, force = false) {
       const body = await readJson(response);
       if (!response.ok)
         throw new Error(body.error || "Unable to load this page.");
-      cache.set(tab, body);
+      cache.set(key, body);
       return body;
     })
-    .finally(() => pending.delete(tab));
-  pending.set(tab, request);
+    .finally(() => pending.delete(key));
+  pending.set(key, request);
   return request;
 }
 
@@ -88,17 +96,19 @@ export default function ClientConsole({ initialTab }: { initialTab: Tab }) {
   const [open, setOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [locations, setLocations] = useState<any[]>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState("");
   const [support, setSupport] = useState<{ priority: boolean; whatsapp: string }>({ priority: false, whatsapp: "" });
   const accountRef = useRef<HTMLDivElement>(null);
 
-  async function load(tab: Tab, force = false) {
-    const cached = force ? undefined : cache.get(tab);
+  async function load(tab: Tab, force = false, locationId = selectedLocationId) {
+    const cached = force ? undefined : cache.get(cacheKey(tab, locationId));
     setError("");
     setData((current) => cached || (force ? current : null));
     setLoading(!cached && !force);
     if (force) setRefreshing(true);
     try {
-      setData(await getTabData(tab, force));
+      setData(await getTabData(tab, force, locationId));
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Unable to load this page.",
@@ -114,23 +124,42 @@ export default function ClientConsole({ initialTab }: { initialTab: Tab }) {
       setOpen(false);
       return;
     }
-    window.history.pushState(
-      {},
-      "",
-      tab === "dashboard" ? "/client/dashboard" : `/client/${tab}`,
-    );
+    const path = tab === "dashboard" ? "/client/dashboard" : `/client/${tab}`;
+    const query = selectedLocationId && (tab === "dashboard" || tab === "reviews")
+      ? `?location=${encodeURIComponent(selectedLocationId)}`
+      : "";
+    window.history.pushState({}, "", `${path}${query}`);
     setActive(tab);
     setOpen(false);
-    void load(tab);
+    void load(tab, false, selectedLocationId);
+  }
+
+  function changeLocation(locationId: string) {
+    setSelectedLocationId(locationId);
+    const params = new URLSearchParams(window.location.search);
+    if (locationId) params.set("location", locationId);
+    else params.delete("location");
+    const query = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+    if (active === "dashboard" || active === "reviews")
+      void load(active, true, locationId);
   }
 
   useEffect(() => {
-    void load(initialTab);
+    const initialLocation = new URLSearchParams(window.location.search).get("location") || "";
+    setSelectedLocationId(initialLocation);
+    void load(initialTab, false, initialLocation);
+    void fetch("/api/client/locations", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((value) => { if (value?.locations) setLocations(value.locations); })
+      .catch(() => undefined);
     void fetch("/api/client/support", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((value) => { if (value) setSupport(value); }).catch(() => undefined);
     const onPopState = () => {
       const next = tabFromPath(window.location.pathname);
+      const nextLocation = new URLSearchParams(window.location.search).get("location") || "";
       setActive(next);
-      void load(next);
+      setSelectedLocationId(nextLocation);
+      void load(next, false, nextLocation);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -147,7 +176,7 @@ export default function ClientConsole({ initialTab }: { initialTab: Tab }) {
     return () => document.removeEventListener("click", close);
   }, []);
 
-  const tenant = data?.tenant || cache.get("dashboard")?.tenant;
+  const tenant = data?.tenant || cache.get(cacheKey("dashboard", selectedLocationId))?.tenant;
   const businessName = tenant?.name || "Business workspace";
   const avatar =
     businessName
@@ -207,7 +236,7 @@ export default function ClientConsole({ initialTab }: { initialTab: Tab }) {
                   navigate("settings");
                 }}
               >
-                Business profile
+                My profile
               </button>
               <a href="/api/auth/logout">Sign out</a>
             </div>
@@ -306,7 +335,14 @@ export default function ClientConsole({ initialTab }: { initialTab: Tab }) {
               </button>
             </div>
           ) : (
-            <TabContent tab={active} data={data || {}} navigate={navigate} />
+            <TabContent
+              tab={active}
+              data={data || {}}
+              navigate={navigate}
+              locations={locations}
+              selectedLocationId={selectedLocationId}
+              onLocationChange={changeLocation}
+            />
           )}
         </section>
       </div>
@@ -318,13 +354,19 @@ function TabContent({
   tab,
   data,
   navigate,
+  locations,
+  selectedLocationId,
+  onLocationChange,
 }: {
   tab: Tab;
   data: WorkspaceData;
   navigate: (tab: Tab) => void;
+  locations: any[];
+  selectedLocationId: string;
+  onLocationChange: (locationId: string) => void;
 }) {
-  if (tab === "dashboard") return <Dashboard data={data} />;
-  if (tab === "reviews") return <Reviews data={data} />;
+  if (tab === "dashboard") return <Dashboard data={data} locations={locations} selectedLocationId={selectedLocationId} onLocationChange={onLocationChange} />;
+  if (tab === "reviews") return <Reviews data={data} locations={locations} selectedLocationId={selectedLocationId} onLocationChange={onLocationChange} />;
   if (tab === "qr") return <Qr data={data} />;
   if (tab === "locations") return <Locations data={data} />;
   if (tab === "renew") return <Renew data={data} />;
@@ -345,31 +387,63 @@ function Heading({
       <div>
         <span className="client-breadcrumb">Workspace / {title}</span>
         <h1>{title}</h1>
-        <p>{description}</p>
+        {description && <p>{description}</p>}
       </div>
       {action}
     </div>
   );
 }
-function Dashboard({ data }: { data: WorkspaceData }) {
+
+function LocationFilter({
+  locations,
+  value,
+  onChange,
+}: {
+  locations: any[];
+  value: string;
+  onChange: (locationId: string) => void;
+}) {
+  if (!locations.length) return null;
+  return (
+    <label className="client-location-filter">
+      <span className="sr-only">Filter by location</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} aria-label="Filter by location">
+        <option value="">All locations</option>
+        {locations.filter((location) => location.is_active !== false).map((location) => (
+          <option value={location.id} key={location.id}>
+            {location.name}{location.city ? ` · ${location.city}` : ""}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function Dashboard({ data, locations, selectedLocationId, onLocationChange }: { data: WorkspaceData; locations: any[]; selectedLocationId: string; onLocationChange: (locationId: string) => void }) {
   const counts = (data.ratingCounts || [0, 0, 0, 0, 0]) as number[];
   const total = data.totalScans || 0;
+  const locationName = data.selectedLocation?.name;
   const plan = Array.isArray(data.subscription?.plans)
     ? data.subscription?.plans[0]
     : data.subscription?.plans;
   if (data.reportsEnabled === false)
     return (
       <>
-        <Heading title="Dashboard" description="Monitor your customer feedback and review activity." />
+        <Heading title="Dashboard" description="" />
         <FeatureLocked title="Basic reports are not included" text="Upgrade your plan to view dashboard metrics and customer activity." />
       </>
     );
   return (
     <>
       <Heading
-        title="Dashboard"
-        description="Monitor your customer feedback and review activity."
-        action={<span className="pill pill-green">{total} scans tracked</span>}
+        title={locationName ? `Dashboard · ${locationName}` : "Dashboard"}
+        description=""
+        action={
+          <div className="client-heading-actions">
+            <LocationFilter locations={locations} value={selectedLocationId} onChange={onLocationChange} />
+            <span className="pill pill-green">{total} scans tracked</span>
+          </div>
+        }
       />
       <div className="client-stats">
         <div>
@@ -403,7 +477,7 @@ function Dashboard({ data }: { data: WorkspaceData }) {
             <div>
               <h2>Rating overview</h2>
               <p>
-                {data.profile?.business_type || "Your business"}
+                {locationName || data.profile?.business_type || "Your business"}
                 {data.profile?.city ? ` · ${data.profile.city}` : ""}
               </p>
             </div>
@@ -459,7 +533,7 @@ function Dashboard({ data }: { data: WorkspaceData }) {
     </>
   );
 }
-function Reviews({ data }: { data: WorkspaceData }) {
+function Reviews({ data, locations, selectedLocationId, onLocationChange }: { data: WorkspaceData; locations: any[]; selectedLocationId: string; onLocationChange: (locationId: string) => void }) {
   const [scans, setScans] = useState<any[]>(data.scans || []);
   const [feedback, setFeedback] = useState<any[]>(data.feedback || []);
   const [page, setPage] = useState(Number(data.page || 1));
@@ -468,6 +542,7 @@ function Reviews({ data }: { data: WorkspaceData }) {
   );
   const [loadingMore, setLoadingMore] = useState(false);
   const ratings = scans.length;
+  const locationName = data.selectedLocation?.name;
   useEffect(() => {
     setScans(data.scans || []);
     setFeedback(data.feedback || []);
@@ -486,7 +561,7 @@ function Reviews({ data }: { data: WorkspaceData }) {
       setLoadingMore(true);
       try {
         const response = await fetch(
-          `/api/client/workspace?tab=reviews&page=${page + 1}&limit=20`,
+          `/api/client/workspace?tab=reviews&page=${page + 1}&limit=20${data.locationId ? `&location=${encodeURIComponent(data.locationId)}` : ""}`,
           { cache: "no-store" },
         );
         const next = await response.json();
@@ -509,15 +584,16 @@ function Reviews({ data }: { data: WorkspaceData }) {
   if (data.reportsEnabled === false)
     return (
       <>
-        <Heading title="Reviews & feedback" description="See ratings and private customer messages collected through your QR code." />
+        <Heading title="Reviews & feedback" description="" />
         <FeatureLocked title="Basic reports are not included" text="Upgrade your plan to view ratings, reviews and feedback reports." />
       </>
     );
   return (
     <>
       <Heading
-        title="Reviews & feedback"
-        description="See ratings and private customer messages collected through your QR code."
+        title={locationName ? `Reviews & feedback · ${locationName}` : "Reviews & feedback"}
+        description=""
+        action={<LocationFilter locations={locations} value={selectedLocationId} onChange={onLocationChange} />}
       />
       <div className="client-stats">
         <div>
@@ -569,7 +645,7 @@ function Reviews({ data }: { data: WorkspaceData }) {
               <div>
                 <strong>{row.rating} out of 5</strong>
                 <small>
-                  {row.tags?.length ? row.tags.join(", ") : "No tags selected"}{" "}
+                  {row.services_used?.length ? `Services: ${row.services_used.join(", ")} · ` : ""}{row.tags?.length ? row.tags.join(", ") : "No tags selected"}{" "}
                   · {row.language || "English"}
                 </small>
               </div>
@@ -1123,96 +1199,38 @@ function Settings({
   data: WorkspaceData;
   navigate: (tab: Tab) => void;
 }) {
-  const profile = data.profile || {};
   return (
     <>
       <Heading
-        title="Business profile"
-        description="Manage the information used on your review page and customer review drafts."
+        title="My profile"
+        description=""
       />
-      <form
-        className="client-card client-settings-form"
-        action="/api/client/profile"
-        method="post"
-      >
-        <input type="hidden" name="return_to" value="/client/settings" />
-        <div className="client-form-grid">
-          <Field
-            id="business-name"
-            name="name"
-            label="Business name"
-            value={data.tenant?.name || ""}
-            required
-          />
-          <Field
-            id="business-type"
-            name="business_type"
-            label="Business type"
-            value={profile.business_type || ""}
-            required
-          />
-          <Field
-            id="city"
-            name="city"
-            label="City / area"
-            value={profile.city || ""}
-            required
-          />
-          <Field
-            id="place-id"
-            name="place_id"
-            label="Google Business link or Place ID"
-            value={profile.place_id || ""}
-          />
-          <Field
-            id="logo-url"
-            name="logo_url"
-            label="Logo image URL"
-            value={profile.logo_url || ""}
-          />
-          <LanguagePicker
-            name="languages"
-            label="Review languages"
-            value={profile.languages || ["English"]}
-          />
-          <Field
-            id="custom-tags"
-            name="custom_tags"
-            label="Review tags"
-            value={(profile.custom_tags || []).join(", ")}
-          />
-          <Field
-            id="services"
-            name="services"
-            label="What do customers value?"
-            value={(profile.services || []).join(", ")}
-            wide
-          />
-          <div className="field span-2">
-            <label htmlFor="welcome-message">
-              Welcome message <span className="optional-label">Optional</span>
-            </label>
-            <textarea
-              id="welcome-message"
-              name="welcome_message"
-              rows={4}
-              defaultValue={profile.welcome_message || ""}
-            />
+      <section className="client-card client-settings-form account-profile-card">
+        <div className="account-profile-grid">
+          <div>
+            <small>Email address</small>
+            <strong>{data.account?.email || "Not available"}</strong>
+          </div>
+          <div>
+            <small>Account role</small>
+            <strong>{data.account?.role === "client" ? "Client" : data.account?.role || "User"}</strong>
+          </div>
+          <div>
+            <small>Business account</small>
+            <strong>{data.tenant?.name || "Not available"}</strong>
+          </div>
+          <div>
+            <small>Account status</small>
+            <strong>{data.account?.status === "active" ? "Active" : data.account?.status || "Unknown"}</strong>
           </div>
         </div>
         <div className="client-form-actions">
-          <button className="btn btn-primary" type="submit">
-            Save profile
-          </button>
-          <button
-            className="btn btn-outline"
-            type="button"
-            onClick={() => navigate("qr")}
-          >
-            View QR code
+          <a className="btn btn-primary" href="/change-password">Change password</a>
+          <button className="btn btn-outline" type="button" onClick={() => navigate("locations")}>
+            Manage locations
           </button>
         </div>
-      </form>
+      </section>
     </>
   );
 }

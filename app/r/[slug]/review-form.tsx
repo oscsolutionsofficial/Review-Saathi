@@ -8,6 +8,7 @@ type Props = {
   city: string;
   logoUrl: string;
   languages: string[];
+  services: string[];
   tags: string[];
   placeId: string;
   allowPrivateFeedback: boolean;
@@ -50,12 +51,16 @@ export default function ReviewForm({
   city,
   logoUrl,
   languages,
+  services,
   tags,
   placeId,
   allowPrivateFeedback,
 }: Props) {
   const [rating, setRating] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [servicesOpen, setServicesOpen] = useState(false);
+  const [servicesOpenUp, setServicesOpenUp] = useState(false);
   const [language, setLanguage] = useState(languages[0] ?? "English");
   const [drafts, setDrafts] = useState<string[]>([]);
   const [selectedDraft, setSelectedDraft] = useState(0);
@@ -69,6 +74,7 @@ export default function ReviewForm({
   const [languageOpen, setLanguageOpen] = useState(false);
   const [languageOpenUp, setLanguageOpenUp] = useState(false);
   const languageMenuRef = useRef<HTMLDivElement>(null);
+  const serviceMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const field = document.querySelector<HTMLLabelElement>(
@@ -79,15 +85,21 @@ export default function ReviewForm({
 
   useEffect(() => {
     function closeLanguageMenu(event: MouseEvent) {
-      if (!languageMenuRef.current?.contains(event.target as Node))
+      const target = event.target as Node;
+      if (!languageMenuRef.current?.contains(target))
         setLanguageOpen(false);
+      if (!serviceMenuRef.current?.contains(target)) setServicesOpen(false);
     }
     document.addEventListener("mousedown", closeLanguageMenu);
     return () => document.removeEventListener("mousedown", closeLanguageMenu);
   }, []);
 
   async function generateDraft() {
-    if (!rating || loading || scanLimitReached) return;
+    if (!rating) {
+      setError("Please select a rating before creating review drafts.");
+      return;
+    }
+    if (loading || scanLimitReached) return;
     setLoading(true);
     setError("");
     setDrafts([]);
@@ -95,7 +107,7 @@ export default function ReviewForm({
       const response = await fetch("/api/review/draft", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ slug, rating, tags: selected, language }),
+        body: JSON.stringify({ slug, rating, tags: selected, servicesUsed: selectedServices, language }),
       });
       const data = await response.json();
       if (!response.ok || !data.drafts?.length)
@@ -111,6 +123,7 @@ export default function ReviewForm({
           slug,
           rating,
           tags: selected,
+          servicesUsed: selectedServices,
           language,
           copied: false,
         }),
@@ -204,7 +217,7 @@ export default function ReviewForm({
           <p>{city ? `${city} · ` : ""}Tell us about your visit</p>
         </div>
         <label className="rating-label">How was your visit?</label>
-        <div className="rating" aria-label="Choose a rating">
+        <div className={`rating ${error && !rating ? "rating-error" : ""}`} aria-label="Choose a rating">
           {[1, 2, 3, 4, 5].map((value) => (
             <button
               type="button"
@@ -213,6 +226,7 @@ export default function ReviewForm({
               key={value}
               onClick={() => {
                 setRating(value);
+                setError("");
                 setDrafts([]);
                 setScanId("");
               }}
@@ -243,6 +257,60 @@ export default function ReviewForm({
             </button>
           ))}
         </div>
+        {services.length > 0 && (
+          <div className="field">
+            <label htmlFor="review-services">Which service did you use? <span className="muted">(Select up to 3)</span></label>
+            <div className="language-select service-checklist" ref={serviceMenuRef}>
+              <button
+                className="language-select-trigger"
+                id="review-services"
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={servicesOpen}
+                onClick={(event) => {
+                  const nextOpen = !servicesOpen;
+                  if (nextOpen) {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const spaceBelow = window.innerHeight - rect.bottom;
+                    const spaceAbove = rect.top;
+                    setServicesOpenUp(spaceBelow < 360 && spaceAbove > spaceBelow);
+                  }
+                  setServicesOpen(nextOpen);
+                }}
+              >
+                <span className="service-summary">
+                  {selectedServices.length === 1
+                    ? selectedServices[0]
+                    : selectedServices.length
+                      ? `${selectedServices.length} services selected`
+                      : "Select services"}
+                </span>
+                <span className={`language-chevron ${servicesOpen ? "open" : ""}`} aria-hidden="true">⌄</span>
+              </button>
+              {servicesOpen && (
+                <div className={`language-options service-options ${servicesOpenUp ? "open-up" : ""}`} role="listbox" aria-labelledby="review-services" aria-multiselectable="true">
+                  {services.map((service) => {
+                    const checked = selectedServices.includes(service);
+                    return (
+                      <button
+                        className={`language-option ${checked ? "selected" : ""}`}
+                        key={service}
+                        type="button"
+                        role="option"
+                        aria-selected={checked}
+                        disabled={!checked && selectedServices.length >= 3}
+                        onClick={() => setSelectedServices((current) => checked ? current.filter((item) => item !== service) : [...current, service])}
+                      >
+                        <span>{service}</span>
+                        <span className={`service-check ${checked ? "checked" : ""}`} aria-hidden="true" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         <div className="field">
           <label htmlFor="review-language">Choose review language</label>
           <div className="language-select" ref={languageMenuRef}>
@@ -298,7 +366,7 @@ export default function ReviewForm({
         <button
           className="btn btn-outline"
           type="button"
-          disabled={!rating || loading || posting || scanLimitReached}
+          disabled={loading || posting || scanLimitReached}
           onClick={generateDraft}
         >
           {loading ? "Creating 3 drafts…" : "Create 3 review drafts"}

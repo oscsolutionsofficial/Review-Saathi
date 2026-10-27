@@ -125,6 +125,7 @@ create table if not exists public.locations (
 );
 
 alter table public.scans add column if not exists location_id uuid references public.locations(id) on delete set null;
+alter table public.scans add column if not exists services_used text[] not null default '{}'::text[];
 alter table public.private_feedback add column if not exists location_id uuid references public.locations(id) on delete set null;
 alter table public.locations add column if not exists business_type text not null default '';
 
@@ -209,6 +210,7 @@ create or replace function public.create_public_scan(
   p_tenant_id uuid,
   p_rating integer,
   p_tags text[],
+  p_services_used text[],
   p_language text,
   p_copied boolean,
   p_location_id uuid
@@ -236,14 +238,14 @@ begin
   select p.max_scans_per_month into scan_limit from public.plans p where p.id = subscription_row.plan_id;
   select count(*)::integer into used_scans from public.scans where tenant_id = p_tenant_id and created_at >= subscription_row.start_date;
   if coalesce(scan_limit, 0) > 0 and used_scans >= scan_limit then raise exception 'SCAN_LIMIT_REACHED'; end if;
-  insert into public.scans (tenant_id, location_id, rating, tags, language, copied)
-  values (p_tenant_id, valid_location_id, p_rating, coalesce(p_tags, '{}'::text[]), p_language, coalesce(p_copied, false))
+  insert into public.scans (tenant_id, location_id, rating, tags, services_used, language, copied)
+  values (p_tenant_id, valid_location_id, p_rating, coalesce(p_tags, '{}'::text[]), coalesce(p_services_used, '{}'::text[]), p_language, coalesce(p_copied, false))
   returning id into new_scan_id;
   return new_scan_id;
 end;
 $$;
 
-revoke all on function public.create_public_scan(uuid, integer, text[], text, boolean, uuid) from public;
-grant execute on function public.create_public_scan(uuid, integer, text[], text, boolean, uuid) to service_role;
+revoke all on function public.create_public_scan(uuid, integer, text[], text[], text, boolean, uuid) from public;
+grant execute on function public.create_public_scan(uuid, integer, text[], text[], text, boolean, uuid) to service_role;
 
 

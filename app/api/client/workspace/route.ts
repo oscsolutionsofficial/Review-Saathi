@@ -15,7 +15,9 @@ export async function GET(request: Request) {
 }
 
 async function handleWorkspaceRequest(request: Request) {
-  const tab = new URL(request.url).searchParams.get("tab") || "dashboard";
+  const searchParams = new URL(request.url).searchParams;
+  const tab = searchParams.get("tab") || "dashboard";
+  const requestedLocationId = searchParams.get("location") || "";
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -47,6 +49,16 @@ async function handleWorkspaceRequest(request: Request) {
       { status: 404 },
     );
   const access = await getTenantPlanAccess(supabase, tenantId);
+  const { data: selectedLocation } = requestedLocationId
+    ? await supabase
+        .from("locations")
+        .select("id,name,business_type,city")
+        .eq("id", requestedLocationId)
+        .eq("tenant_id", tenantId)
+        .eq("is_active", true)
+        .maybeSingle()
+    : { data: null };
+  const locationId = selectedLocation?.id || "";
   const today = new Date().toISOString().slice(0, 10);
   if (tab === "dashboard") {
     if (!hasPlanFeature(access, "basic_reports"))
@@ -61,11 +73,13 @@ async function handleWorkspaceRequest(request: Request) {
       { data: stats },
       { data: recent },
     ] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("business_type,city")
-        .eq("tenant_id", tenantId)
-        .maybeSingle(),
+      locationId
+        ? Promise.resolve({ data: selectedLocation })
+        : supabase
+            .from("profiles")
+            .select("business_type,city")
+            .eq("tenant_id", tenantId)
+            .maybeSingle(),
       supabase
         .from("subscriptions")
         .select(
@@ -74,35 +88,51 @@ async function handleWorkspaceRequest(request: Request) {
         .eq("tenant_id", tenantId)
         .eq("status", "active")
         .maybeSingle(),
-      supabase.rpc("get_tenant_dashboard_stats"),
-      supabase
-        .from("scans")
-        .select("rating,created_at")
-        .eq("tenant_id", tenantId)
-        .order("created_at", { ascending: false })
-        .limit(5),
+      locationId
+        ? Promise.resolve({ data: null })
+        : supabase.rpc("get_tenant_dashboard_stats"),
+      (() => {
+        let query = supabase
+          .from("scans")
+          .select("rating,created_at")
+          .eq("tenant_id", tenantId)
+          .order("created_at", { ascending: false })
+          .limit(5);
+        if (locationId) query = query.eq("location_id", locationId);
+        return query;
+      })(),
     ]);
     const dashboardStats =
       stats ??
       (await (async () => {
         const [{ count: totalScans }, { count: feedbackCount }, counts] =
           await Promise.all([
-            supabase
-              .from("scans")
-              .select("id", { count: "exact", head: true })
-              .eq("tenant_id", tenantId),
-            supabase
-              .from("private_feedback")
-              .select("id", { count: "exact", head: true })
-              .eq("tenant_id", tenantId),
+            (() => {
+              let query = supabase
+                .from("scans")
+                .select("id", { count: "exact", head: true })
+                .eq("tenant_id", tenantId);
+              if (locationId) query = query.eq("location_id", locationId);
+              return query;
+            })(),
+            (() => {
+              let query = supabase
+                .from("private_feedback")
+                .select("id", { count: "exact", head: true })
+                .eq("tenant_id", tenantId);
+              if (locationId) query = query.eq("location_id", locationId);
+              return query;
+            })(),
             Promise.all(
-              [1, 2, 3, 4, 5].map((rating) =>
-                supabase
+              [1, 2, 3, 4, 5].map((rating) => {
+                let query = supabase
                   .from("scans")
                   .select("id", { count: "exact", head: true })
                   .eq("tenant_id", tenantId)
-                  .eq("rating", rating),
-              ),
+                  .eq("rating", rating);
+                if (locationId) query = query.eq("location_id", locationId);
+                return query;
+              }),
             ),
           ]);
         return {
@@ -125,11 +155,13 @@ async function handleWorkspaceRequest(request: Request) {
     const plan = Array.isArray(subscription?.plans)
       ? subscription?.plans[0]
       : subscription?.plans;
-    const { count: usedScans } = await supabase
+    let usageQuery = supabase
       .from("scans")
       .select("id", { count: "exact", head: true })
       .eq("tenant_id", tenantId)
       .gte("created_at", subscription?.start_date || "1900-01-01");
+    if (locationId) usageQuery = usageQuery.eq("location_id", locationId);
+    const { count: usedScans } = await usageQuery;
     const limit = Number(plan?.max_scans_per_month || 0);
     const expired = Boolean(
       subscription?.end_date && subscription.end_date < today,
@@ -137,6 +169,8 @@ async function handleWorkspaceRequest(request: Request) {
     return NextResponse.json({
       tenant,
       profile,
+      locationId,
+      selectedLocation,
       subscription,
       features: access.features,
       usage: {
@@ -181,25 +215,31 @@ async function handleWorkspaceRequest(request: Request) {
     );
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
+    let scansQuery = supabase
+      .from("scans")
+      .select("rating,tags,services_used,language,copied,created_at")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false })
+      .range(from, to);
+    if (locationId) scansQuery = scansQuery.eq("location_id", locationId);
+    let feedbackQuery = supabase
+      .from("private_feedback")
+      .select("rating,message,contact,created_at")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false })
+      .range(from, to);
+    if (locationId) feedbackQuery = feedbackQuery.eq("location_id", locationId);
     const [{ data: scans }, { data: feedback }] = await Promise.all([
-      supabase
-        .from("scans")
-        .select("rating,tags,language,copied,created_at")
-        .eq("tenant_id", tenantId)
-        .order("created_at", { ascending: false })
-        .range(from, to),
+      scansQuery,
       hasPlanFeature(access, "private_feedback")
-        ? supabase
-            .from("private_feedback")
-            .select("rating,message,contact,created_at")
-            .eq("tenant_id", tenantId)
-            .order("created_at", { ascending: false })
-            .range(from, to)
+        ? feedbackQuery
         : Promise.resolve({ data: [] }),
     ]);
     return NextResponse.json({
       tenant,
       features: access.features,
+      locationId,
+      selectedLocation,
       scans: scans ?? [],
       feedback: feedback ?? [],
       page,
@@ -290,14 +330,14 @@ async function handleWorkspaceRequest(request: Request) {
     });
   }
   if (tab === "settings") {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select(
-        "business_type,city,place_id,logo_url,languages,services,custom_tags,welcome_message",
-      )
-      .eq("tenant_id", tenantId)
-      .maybeSingle();
-    return NextResponse.json({ tenant, profile });
+    return NextResponse.json({
+      tenant,
+      account: {
+        email: user.email || "",
+        role: member.role,
+        status: tenant.status,
+      },
+    });
   }
   return NextResponse.json(
     { error: "Unknown workspace tab." },

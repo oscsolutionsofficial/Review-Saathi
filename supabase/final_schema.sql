@@ -119,6 +119,7 @@ create table public.scans (
   tenant_id uuid not null references public.tenants(id) on delete cascade,
   rating integer not null check (rating between 1 and 5),
   tags text[] not null default '{}'::text[],
+  services_used text[] not null default '{}'::text[],
   language text not null default 'English',
   copied boolean not null default false,
   created_at timestamptz not null default now()
@@ -306,6 +307,7 @@ create or replace function public.create_public_scan(
   p_tenant_id uuid,
   p_rating integer,
   p_tags text[],
+  p_services_used text[],
   p_language text,
   p_copied boolean
 )
@@ -343,8 +345,8 @@ begin
     raise exception 'SCAN_LIMIT_REACHED';
   end if;
 
-  insert into public.scans (tenant_id, rating, tags, language, copied)
-  values (p_tenant_id, p_rating, coalesce(p_tags, '{}'::text[]), p_language, coalesce(p_copied, false))
+  insert into public.scans (tenant_id, rating, tags, services_used, language, copied)
+  values (p_tenant_id, p_rating, coalesce(p_tags, '{}'::text[]), coalesce(p_services_used, '{}'::text[]), p_language, coalesce(p_copied, false))
   returning id into new_scan_id;
 
   return new_scan_id;
@@ -393,9 +395,9 @@ begin
 end;
 $$;
 
-revoke all on function public.create_public_scan(uuid, integer, text[], text, boolean) from public;
+revoke all on function public.create_public_scan(uuid, integer, text[], text[], text, boolean) from public;
 revoke all on function public.create_client_account(uuid, uuid, text, text, public.tenant_status, text, text, uuid, date, date) from public;
-grant execute on function public.create_public_scan(uuid, integer, text[], text, boolean) to service_role;
+grant execute on function public.create_public_scan(uuid, integer, text[], text[], text, boolean) to service_role;
 grant execute on function public.create_client_account(uuid, uuid, text, text, public.tenant_status, text, text, uuid, date, date) to service_role;
 
 -- Restore the privileges required by Supabase API roles after a fresh public schema.

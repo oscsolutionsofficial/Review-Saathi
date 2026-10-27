@@ -41,6 +41,7 @@ export default async function ReviewPage({
       city={profile?.city ?? ""}
       logoUrl={logoUrl}
       languages={languages}
+      services={profile?.services?.length ? profile.services : []}
       tags={
         profile?.custom_tags?.length
           ? profile.custom_tags

@@ -139,10 +139,10 @@ export async function PATCH(request: Request) {
   const auth = await getClient();
   if (auth.error) return auth.error;
   const access = await getTenantPlanAccess(auth.admin, auth.tenantId);
-  if (!hasPlanFeature(access, "multiple_locations")) return NextResponse.json({ error: "Multiple locations are not included in your plan." }, { status: 403 });
   const body = await request.json().catch(() => null) as { id?: string; slug?: string; name?: string; business_type?: string; city?: string; place_id?: string; logo_url?: string; languages?: string[]; services?: string[]; custom_tags?: string[]; is_active?: boolean } | null;
   const id = String(body?.id || "");
   if (body?.is_active === true) {
+    if (!hasPlanFeature(access, "multiple_locations")) return NextResponse.json({ error: "Multiple locations are not included in your plan." }, { status: 403 });
     const { count } = await auth.admin.from("locations").select("id", { count: "exact", head: true }).eq("tenant_id", auth.tenantId).eq("is_active", true);
     if ((count ?? 0) >= Number(access.plan?.max_locations || 1)) return NextResponse.json({ error: "Your plan location limit is complete." }, { status: 402 });
     const { error } = await auth.admin.from("locations").update({ is_active: true }).eq("id", id).eq("tenant_id", auth.tenantId);

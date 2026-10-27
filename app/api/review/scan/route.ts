@@ -22,6 +22,8 @@ export async function POST(request: Request) {
       { status: 404 },
     );
   const { tenant, location } = resolved;
+  const configuredServices = Array.isArray(location.services) ? location.services : [];
+  const servicesUsed = parsed.data.servicesUsed.filter((service) => configuredServices.includes(service));
   const access = await getTenantPlanAccess(admin, tenant.id);
   if (!access.active)
     return NextResponse.json(
@@ -60,15 +62,32 @@ export async function POST(request: Request) {
       .update({
         rating: parsed.data.rating,
         tags: parsed.data.tags,
+        services_used: servicesUsed,
         language: parsed.data.language,
         copied: parsed.data.copied,
       })
       .eq("id", scanId)
       .eq("tenant_id", tenant.id);
     if (location.id) updateQuery = updateQuery.eq("location_id", location.id);
-    const { data: updated, error } = await updateQuery
+    let { data: updated, error } = await updateQuery
       .select("id")
       .maybeSingle();
+    if (error && isServicesSchemaMismatch(error)) {
+      let legacyUpdateQuery = admin
+        .from("scans")
+        .update({
+          rating: parsed.data.rating,
+          tags: parsed.data.tags,
+          language: parsed.data.language,
+          copied: parsed.data.copied,
+        })
+        .eq("id", scanId)
+        .eq("tenant_id", tenant.id);
+      if (location.id) legacyUpdateQuery = legacyUpdateQuery.eq("location_id", location.id);
+      ({ data: updated, error } = await legacyUpdateQuery
+        .select("id")
+        .maybeSingle());
+    }
     if (error || !updated)
       return NextResponse.json(
         { error: "Could not update scan" },
@@ -79,11 +98,23 @@ export async function POST(request: Request) {
       p_tenant_id: tenant.id,
       p_rating: parsed.data.rating,
       p_tags: parsed.data.tags,
+      p_services_used: servicesUsed,
       p_language: parsed.data.language,
       p_copied: parsed.data.copied,
       ...(location.id ? { p_location_id: location.id } : {}),
     };
-    const { data: created, error } = await admin.rpc("create_public_scan", rpcArgs);
+    let { data: created, error } = await admin.rpc("create_public_scan", rpcArgs);
+    if (error && isServicesSchemaMismatch(error)) {
+      const legacyArgs = {
+        p_tenant_id: tenant.id,
+        p_rating: parsed.data.rating,
+        p_tags: parsed.data.tags,
+        p_language: parsed.data.language,
+        p_copied: parsed.data.copied,
+        ...(location.id ? { p_location_id: location.id } : {}),
+      };
+      ({ data: created, error } = await admin.rpc("create_public_scan", legacyArgs));
+    }
     if (error) {
       if (error.message.includes("PLAN_EXPIRED"))
         return NextResponse.json(
@@ -118,4 +149,9 @@ export async function POST(request: Request) {
       );
   }
   return NextResponse.json({ ok: true, scanId });
+}
+
+function isServicesSchemaMismatch(error: { message?: string } | null) {
+  const message = error?.message || "";
+  return /services_used|create_public_scan|schema cache|function .* does not exist/i.test(message);
 }
