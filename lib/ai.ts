@@ -83,9 +83,9 @@ function fallbackDrafts(input: DraftInput) {
   if (input.language === "Bengali") return [first, `পরিষেবা খুব ভালো ছিল এবং ${tags} আমার বিশেষ পছন্দ হয়েছে।`, `কর্মীরা খুব সহায়ক ছিলেন। আমি আবার আসব।`];
   if (input.rating >= 4) {
     return [
-      `I had an excellent experience with ${business} for ${service}. The team was professional, and I appreciated ${tags}. I would happily recommend them.`,
-      `${business} made my ${service} experience smooth and reassuring. I was especially pleased with ${tags}, and I am very happy with the service.`,
-      `Choosing ${business} for ${service} was a great decision. The professional team provided ${tags}, and I would gladly choose them again.`,
+      `I got ${service} done by ${business}. The team was professional, and I am happy with ${tags}. I would happily recommend them.`,
+      `I had a very good experience with ${business} for ${service}. The installation was professional, and I am happy with ${tags}. I would recommend them.`,
+      `${business} did a good job with my ${service}. I liked ${tags}, and I would choose their service again.`,
     ];
   }
   return [
