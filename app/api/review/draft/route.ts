@@ -92,6 +92,7 @@ export async function POST(request: Request) {
       tags: parsed.data.tags,
       servicesUsed,
       language: parsed.data.language,
+      length: parsed.data.length,
     });
     return NextResponse.json({ draft: drafts[0], drafts });
   } catch {

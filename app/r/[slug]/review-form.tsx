@@ -62,6 +62,7 @@ export default function ReviewForm({
   const [servicesOpen, setServicesOpen] = useState(false);
   const [servicesOpenUp, setServicesOpenUp] = useState(false);
   const [language, setLanguage] = useState(languages[0] ?? "English");
+  const [reviewLength, setReviewLength] = useState<"short" | "standard" | "detailed">("standard");
   const [drafts, setDrafts] = useState<string[]>([]);
   const [selectedDraft, setSelectedDraft] = useState(0);
   const [privateFeedback, setPrivateFeedback] = useState("");
@@ -73,8 +74,11 @@ export default function ReviewForm({
   const [logoFailed, setLogoFailed] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [languageOpenUp, setLanguageOpenUp] = useState(false);
+  const [lengthOpen, setLengthOpen] = useState(false);
+  const [lengthOpenUp, setLengthOpenUp] = useState(false);
   const languageMenuRef = useRef<HTMLDivElement>(null);
   const serviceMenuRef = useRef<HTMLDivElement>(null);
+  const lengthMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const field = document.querySelector<HTMLLabelElement>(
@@ -89,6 +93,7 @@ export default function ReviewForm({
       if (!languageMenuRef.current?.contains(target))
         setLanguageOpen(false);
       if (!serviceMenuRef.current?.contains(target)) setServicesOpen(false);
+      if (!lengthMenuRef.current?.contains(target)) setLengthOpen(false);
     }
     document.addEventListener("mousedown", closeLanguageMenu);
     return () => document.removeEventListener("mousedown", closeLanguageMenu);
@@ -111,7 +116,7 @@ export default function ReviewForm({
       const response = await fetch("/api/review/draft", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ slug, rating, tags: selected, servicesUsed: selectedServices, language }),
+        body: JSON.stringify({ slug, rating, tags: selected, servicesUsed: selectedServices, language, length: reviewLength }),
       });
       const data = await response.json();
       if (!response.ok || !data.drafts?.length)
@@ -358,6 +363,64 @@ export default function ReviewForm({
                   >
                     <span>{item}</span>
                     {language === item && <span aria-hidden="true">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="review-length">Review length</label>
+          <div className="language-select" ref={lengthMenuRef}>
+            <button
+              className="language-select-trigger"
+              id="review-length"
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={lengthOpen}
+              onClick={(event) => {
+                const nextOpen = !lengthOpen;
+                if (nextOpen) {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const spaceBelow = window.innerHeight - rect.bottom;
+                  const spaceAbove = rect.top;
+                  setLengthOpenUp(spaceBelow < 260 && spaceAbove > spaceBelow);
+                }
+                setLengthOpen(nextOpen);
+              }}
+            >
+              <span>
+                {reviewLength === "short"
+                  ? "Short (2 sentences)"
+                  : reviewLength === "detailed"
+                    ? "Detailed (5–6 sentences)"
+                    : "Standard (3–4 sentences)"}
+              </span>
+              <span className={`language-chevron ${lengthOpen ? "open" : ""}`} aria-hidden="true">⌄</span>
+            </button>
+            {lengthOpen && (
+              <div className={`language-options ${lengthOpenUp ? "open-up" : ""}`} role="listbox" aria-labelledby="review-length">
+                {[
+                  ["short", "Short (2 sentences)"],
+                  ["standard", "Standard (3–4 sentences)"],
+                  ["detailed", "Detailed (5–6 sentences)"],
+                ].map(([value, label]) => (
+                  <button
+                    className={`language-option ${reviewLength === value ? "selected" : ""}`}
+                    key={value}
+                    type="button"
+                    role="option"
+                    aria-selected={reviewLength === value}
+                    onClick={() => {
+                      setReviewLength(value as "short" | "standard" | "detailed");
+                      setLengthOpen(false);
+                      setSelectedDraft(0);
+                      setDrafts([]);
+                      setScanId("");
+                    }}
+                  >
+                    <span>{label}</span>
+                    {reviewLength === value && <span aria-hidden="true">✓</span>}
                   </button>
                 ))}
               </div>
