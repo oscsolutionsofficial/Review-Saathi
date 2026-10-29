@@ -67,11 +67,27 @@ function fallbackDraft(input: DraftInput) {
 
 function fallbackDrafts(input: DraftInput) {
   const first = fallbackDraft(input);
-  const tags = input.tags.slice(0, 2).join(" and ").toLowerCase() || "the overall experience";
+  const business = input.businessName || "the team";
+  const service = input.servicesUsed[0] || "service";
+  const details = input.tags.slice(0, 3).map((tag) => tag.toLowerCase());
+  const tags = details.length === 3
+    ? `${details[0]}, ${details[1]}, and ${details[2]}`
+    : details.join(" and ") || "the overall experience";
   if (input.language === "Hinglish") return [first, `Service smooth tha aur ${tags} kaafi accha laga. Overall experience friendly aur comfortable raha.`, `Staff helpful tha aur ${tags} genuinely pasand aaya. Zarur dobara visit karunga.`];
   if (input.language === "Hindi") return [first, `यहाँ मेरा अनुभव बहुत अच्छा रहा। ${tags} मुझे खास तौर पर पसंद आया।`, `सेवा अच्छी थी और ${tags} का अनुभव यादगार रहा। मैं फिर आना चाहूँगा।`];
   if (input.language === "Punjabi") return [first, `ਸੇਵਾ ਬਹੁਤ ਵਧੀਆ ਸੀ ਅਤੇ ${tags} ਮੈਨੂੰ ਖਾਸ ਪਸੰਦ ਆਇਆ।`, `ਸਟਾਫ਼ ਮਦਦਗਾਰ ਸੀ। ਮੈਂ ਇਸ ਥਾਂ 'ਤੇ ਦੁਬਾਰਾ ਜ਼ਰੂਰ ਆਵਾਂਗਾ।`];
   if (input.language === "Marathi") return [first, `सेवा खूप चांगली होती आणि ${tags} मला विशेष आवडले.`, `कर्मचारी मदतशील होते. मी पुन्हा नक्की भेट देईन.`];
   if (input.language === "Bengali") return [first, `পরিষেবা খুব ভালো ছিল এবং ${tags} আমার বিশেষ পছন্দ হয়েছে।`, `কর্মীরা খুব সহায়ক ছিলেন। আমি আবার আসব।`];
-  return [first, `The experience was smooth and enjoyable. I really appreciated ${tags} and the warm service.`, `A pleasant visit with ${tags} standing out. Everything felt comfortable and welcoming.`];
+  if (input.rating >= 4) {
+    return [
+      `I had an excellent experience with ${business} for ${service}. The team was professional, and I appreciated ${tags}. I would happily recommend them.`,
+      `${business} made my ${service} experience smooth and reassuring. I was especially pleased with ${tags}, and I am very happy with the service.`,
+      `Choosing ${business} for ${service} was a great decision. The professional team provided ${tags}, and I would gladly choose them again.`,
+    ];
+  }
+  return [
+    first,
+    `My experience with ${business} for ${service} was straightforward. I appreciated ${tags}.`,
+    `I appreciated the ${service} experience with ${business}, especially ${tags}.`,
+  ];
 }
