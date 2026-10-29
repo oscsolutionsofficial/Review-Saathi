@@ -42,6 +42,9 @@ function draftsMatchRatingTone(drafts: string[], rating: number) {
     "can't say enough", "cannot say enough", "can't recommend enough",
     "cannot recommend enough", "significant savings", "dramatically",
     "green future", "greener future", "environmentally friendly",
+    "couldn't be happier", "couldnt be happier", "couldn't recommend",
+    "if you're considering", "if you are considering", "make the switch",
+    "to anyone looking", "to anyone considering", "without hesitation",
     "not good", "ไม่ดี", "खराब", "बुरा", "निराश", "समस्या", "बकवास",
     "bekaar", "kharab", "ganda", "nirash", "problem", "complaint",
   ];
